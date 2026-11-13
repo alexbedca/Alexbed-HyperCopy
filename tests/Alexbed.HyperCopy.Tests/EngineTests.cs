@@ -331,7 +331,7 @@ public class EngineTests
     }
 
     [Fact]
-    public void Cancellation_stops_and_leaves_no_partial_file()
+    public async Task Cancellation_stops_and_leaves_no_partial_file()
     {
         using var t = new TempDir();
         var src = MakeFile(Path.Combine(t.Sub("src"), "huge.bin"), 300_000_000);
@@ -341,15 +341,15 @@ public class EngineTests
         using var cts = new CancellationTokenSource();
         engine.Pause.Pause(); // hold the job so cancellation is deterministic
         var job = engine.ExecuteAsync(plan, cts.Token);
-        Thread.Sleep(200);
+        await Task.Delay(200);
         cts.Cancel();
-        var r = job.Result;
+        var r = await job;
         Assert.True(r.Cancelled);
         Assert.False(File.Exists(Path.Combine(dst, "huge.bin")));
     }
 
     [Fact]
-    public void Pause_and_resume_completes()
+    public async Task Pause_and_resume_completes()
     {
         using var t = new TempDir();
         var src = MakeFile(Path.Combine(t.Sub("src"), "p.bin"), 40_000_000);
@@ -358,10 +358,10 @@ public class EngineTests
         var plan = engine.Scan([src], dst);
         engine.Pause.Pause();
         var job = engine.ExecuteAsync(plan);
-        Thread.Sleep(300);
+        await Task.Delay(300);
         Assert.False(job.IsCompleted);
         engine.Pause.Resume();
-        Assert.True(job.Result.Success);
+        Assert.True((await job).Success);
         Assert.Equal(Hash(src), Hash(Path.Combine(dst, "p.bin")));
     }
 
