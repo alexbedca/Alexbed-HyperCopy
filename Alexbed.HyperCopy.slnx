@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Alexbed.HyperCopy.App/Alexbed.HyperCopy.App.csproj" />
+    <Project Path="src/Alexbed.HyperCopy.Cli/Alexbed.HyperCopy.Cli.csproj" />
+    <Project Path="src/Alexbed.HyperCopy.Core/Alexbed.HyperCopy.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Alexbed.HyperCopy.Tests/Alexbed.HyperCopy.Tests.csproj" />
+  </Folder>
+</Solution>

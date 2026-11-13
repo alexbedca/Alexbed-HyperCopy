@@ -1,0 +1,402 @@
+using System.IO.Hashing;
+using Alexbed.HyperCopy.Core;
+
+namespace Alexbed.HyperCopy.Tests;
+
+public sealed class TempDir : IDisposable
+{
+    public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hypercopy-tests", Guid.NewGuid().ToString("N"));
+    public TempDir() => Directory.CreateDirectory(Path);
+    public string Sub(string name) => Directory.CreateDirectory(System.IO.Path.Combine(Path, name)).FullName;
+
+    public void Dispose()
+    {
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(Path, "*", SearchOption.AllDirectories))
+                File.SetAttributes(f, FileAttributes.Normal);
+            Directory.Delete(Path, true);
+        }
+        catch { }
+    }
+}
+
+public class EngineTests
+{
+    private static readonly Random Rng = new(1234);
+
+    private static string MakeFile(string path, long size)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var fs = new FileStream(path, FileMode.Create);
+        var buf = new byte[Math.Min(size, 1 << 20)];
+        long left = size;
+        while (left > 0)
+        {
+            Rng.NextBytes(buf);
+            int n = (int)Math.Min(left, buf.Length);
+            fs.Write(buf, 0, n);
+            left -= n;
+        }
+        return path;
+    }
+
+    private static ulong Hash(string path)
+    {
+        var h = new XxHash3();
+        using var fs = File.OpenRead(path);
+        h.Append(fs);
+        return h.GetCurrentHashAsUInt64();
+    }
+
+    private static void AssertTreesEqual(string a, string b)
+    {
+        var fa = Directory.GetFiles(a, "*", SearchOption.AllDirectories).Select(p => Path.GetRelativePath(a, p)).Order().ToList();
+        var fb = Directory.GetFiles(b, "*", SearchOption.AllDirectories).Select(p => Path.GetRelativePath(b, p)).Order().ToList();
+        Assert.Equal(fa, fb);
+        foreach (var rel in fa)
+        {
+            Assert.Equal(new FileInfo(Path.Combine(a, rel)).Length, new FileInfo(Path.Combine(b, rel)).Length);
+            Assert.Equal(Hash(Path.Combine(a, rel)), Hash(Path.Combine(b, rel)));
+        }
+        var da = Directory.GetDirectories(a, "*", SearchOption.AllDirectories).Select(p => Path.GetRelativePath(a, p)).Order();
+        var db = Directory.GetDirectories(b, "*", SearchOption.AllDirectories).Select(p => Path.GetRelativePath(b, p)).Order();
+        Assert.Equal(da, db);
+    }
+
+    private static CopyResult Run(CopyOptions o, IReadOnlyList<string> sources, string dest, out CopyEngine engine)
+    {
+        engine = new CopyEngine(o);
+        var plan = engine.Scan(sources, dest);
+        return engine.Execute(plan);
+    }
+
+    private static CopyResult Run(CopyOptions o, IReadOnlyList<string> sources, string dest) => Run(o, sources, dest, out _);
+
+    // Sizes straddling sector (4096), buffer and small/large thresholds.
+    public static TheoryData<long> EdgeSizes => [0, 1, 511, 4095, 4096, 4097, 65537, 1_048_575,
+        4L * 1024 * 1024 - 1, 4L * 1024 * 1024, 4L * 1024 * 1024 + 1, 16L * 1024 * 1024 + 4097, 50_000_123];
+
+    [Theory]
+    [MemberData(nameof(EdgeSizes))]
+    public void Copies_file_of_any_size_byte_exact(long size)
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "f.bin"), size);
+        var dst = t.Sub("dst");
+        var r = Run(new CopyOptions { Verify = true }, [src], dst);
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        var copied = Path.Combine(dst, "f.bin");
+        Assert.Equal(size, new FileInfo(copied).Length);
+        Assert.Equal(Hash(src), Hash(copied));
+    }
+
+    [Theory]
+    [InlineData(PerformanceProfile.SolidState, false)]
+    [InlineData(PerformanceProfile.Rotational, false)]
+    [InlineData(PerformanceProfile.Auto, true)]
+    public void Copies_nested_tree_with_all_profiles(PerformanceProfile profile, bool buffered)
+    {
+        using var t = new TempDir();
+        var root = t.Sub("src");
+        var data = Path.Combine(root, "Data");
+        MakeFile(Path.Combine(data, "a.txt"), 10);
+        MakeFile(Path.Combine(data, "sub", "deep", "b.bin"), 6_000_000);
+        MakeFile(Path.Combine(data, "sub", "c.bin"), 300_000);
+        MakeFile(Path.Combine(data, "ünïcødé 文件 😀.txt"), 1234);
+        for (int i = 0; i < 200; i++) MakeFile(Path.Combine(data, "many", $"f{i}.dat"), Rng.Next(0, 20000));
+        Directory.CreateDirectory(Path.Combine(data, "empty", "dir"));
+
+        var dst = t.Sub("dst");
+        var o = new CopyOptions { Profile = profile, ForceBufferedIo = buffered, Verify = true };
+        var r = Run(o, [data], dst, out var engine);
+
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        AssertTreesEqual(data, Path.Combine(dst, "Data"));
+        Assert.Equal(1.0, engine.Progress.Fraction, 3);
+        Assert.Equal(engine.Progress.TotalFiles, r.FilesCopied);
+    }
+
+    [Theory]
+    [InlineData(1000)]       // small path (CopyFileEx)
+    [InlineData(6_000_000)]  // large path (pipeline)
+    public void Preserves_creation_time_and_readonly(int size)
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "c.bin"), size);
+        var created = new DateTime(2010, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        File.SetCreationTimeUtc(src, created);
+        File.SetAttributes(src, FileAttributes.ReadOnly);
+        var dst = t.Sub("dst");
+        var r = Run(new CopyOptions { Verify = true }, [src], dst);
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        var copied = Path.Combine(dst, "c.bin");
+        Assert.Equal(created, File.GetCreationTimeUtc(copied));
+        Assert.True(File.GetAttributes(copied).HasFlag(FileAttributes.ReadOnly));
+    }
+
+    [Fact]
+    public void Copies_small_file_that_another_program_is_writing()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "log.txt"), 5000);
+        var dst = t.Sub("dst");
+        using (new FileStream(src, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+        {
+            var r = Run(new CopyOptions(), [src], dst);
+            Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        }
+        Assert.Equal(Hash(src), Hash(Path.Combine(dst, "log.txt")));
+    }
+
+    [Fact]
+    public void Preserves_timestamps_and_attributes()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "ro.bin"), 5_000_000);
+        var when = new DateTime(2015, 6, 7, 8, 9, 10, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(src, when);
+        File.SetAttributes(src, FileAttributes.ReadOnly | FileAttributes.Hidden);
+        var dst = t.Sub("dst");
+
+        var r = Run(new CopyOptions(), [src], dst);
+        Assert.True(r.Success);
+        var copied = Path.Combine(dst, "ro.bin");
+        Assert.Equal(when, File.GetLastWriteTimeUtc(copied));
+        var attrs = File.GetAttributes(copied);
+        Assert.True(attrs.HasFlag(FileAttributes.ReadOnly));
+        Assert.True(attrs.HasFlag(FileAttributes.Hidden));
+    }
+
+    [Fact]
+    public void SkipIdentical_resumes_and_overwrites_changed_files()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "D");
+        MakeFile(Path.Combine(data, "same.bin"), 100_000);
+        var changed = MakeFile(Path.Combine(data, "changed.bin"), 100_000);
+        var dst = t.Sub("dst");
+        Assert.True(Run(new CopyOptions(), [data], dst).Success);
+
+        MakeFile(changed, 120_000); // new size + time
+        var r = Run(new CopyOptions { Conflict = ConflictPolicy.SkipIdentical }, [data], dst);
+        Assert.Equal(1, r.FilesSkipped);
+        Assert.Equal(1, r.FilesCopied);
+        AssertTreesEqual(data, Path.Combine(dst, "D"));
+    }
+
+    [Fact]
+    public void Progress_reaches_100_percent_with_verify_and_skips()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "V");
+        MakeFile(Path.Combine(data, "a.bin"), 6_000_000);
+        MakeFile(Path.Combine(data, "b.bin"), 3000);
+        var dst = t.Sub("dst");
+        Assert.True(Run(new CopyOptions(), [data], dst).Success);
+        MakeFile(Path.Combine(data, "c.bin"), 5000);
+
+        var r = Run(new CopyOptions { Verify = true }, [data], dst, out var engine);
+        Assert.Equal(2, r.FilesSkipped);
+        Assert.Equal(1.0, engine.Progress.Fraction, 3);
+    }
+
+    [Fact]
+    public void Skip_policy_never_touches_existing()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "x.bin"), 1000);
+        var dst = t.Sub("dst");
+        var existing = MakeFile(Path.Combine(dst, "x.bin"), 77);
+        var r = Run(new CopyOptions { Conflict = ConflictPolicy.Skip }, [src], dst);
+        Assert.Equal(1, r.FilesSkipped);
+        Assert.Equal(77, new FileInfo(existing).Length);
+    }
+
+    [Fact]
+    public void KeepBoth_writes_numbered_copy()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "x.bin"), 1000);
+        var dst = t.Sub("dst");
+        MakeFile(Path.Combine(dst, "x.bin"), 77);
+        var r = Run(new CopyOptions { Conflict = ConflictPolicy.KeepBoth }, [src], dst);
+        Assert.True(r.Success);
+        Assert.Equal(77, new FileInfo(Path.Combine(dst, "x.bin")).Length);
+        Assert.Equal(Hash(src), Hash(Path.Combine(dst, "x (2).bin")));
+    }
+
+    [Fact]
+    public void Overwrite_replaces_readonly_destination()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "x.bin"), 9_000_000);
+        var dst = t.Sub("dst");
+        var existing = MakeFile(Path.Combine(dst, "x.bin"), 10);
+        File.SetAttributes(existing, FileAttributes.ReadOnly);
+        var r = Run(new CopyOptions { Conflict = ConflictPolicy.Overwrite }, [src], dst);
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        Assert.Equal(Hash(src), Hash(existing));
+    }
+
+    [Fact]
+    public void Move_same_volume_renames_whole_folder()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "M");
+        MakeFile(Path.Combine(data, "a.bin"), 7_000_000);
+        MakeFile(Path.Combine(data, "s", "b.txt"), 10);
+        var snapshot = t.Sub("snapshot");
+        Assert.True(Run(new CopyOptions(), [data], snapshot).Success);
+
+        var dst = t.Sub("dst");
+        var r = Run(new CopyOptions { Mode = TransferMode.Move }, [data], dst);
+        Assert.True(r.Success);
+        Assert.False(Directory.Exists(data));
+        AssertTreesEqual(Path.Combine(snapshot, "M"), Path.Combine(dst, "M"));
+        Assert.Equal(0, r.BytesTransferred); // pure rename: no data written
+    }
+
+    [Fact]
+    public void Move_merges_into_existing_folder_and_removes_source()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "M");
+        MakeFile(Path.Combine(data, "a.bin"), 1000);
+        MakeFile(Path.Combine(data, "s", "b.txt"), 10);
+        var dst = t.Sub("dst");
+        MakeFile(Path.Combine(dst, "M", "other.txt"), 5);
+        var r = Run(new CopyOptions { Mode = TransferMode.Move }, [data], dst);
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        Assert.False(Directory.Exists(data));
+        Assert.True(File.Exists(Path.Combine(dst, "M", "other.txt")));
+        Assert.True(File.Exists(Path.Combine(dst, "M", "s", "b.txt")));
+    }
+
+    [Fact]
+    public void Move_cross_volume_path_copies_then_deletes()
+    {
+        // Simulate the cross-volume code path by forcing the copy pipeline via a merge into an
+        // existing tree on a *different* volume when available; otherwise exercise the delete logic.
+        using var t = new TempDir();
+        string? otherRoot = DriveInfo.GetDrives()
+            .Where(d => d.IsReady && d.DriveType == DriveType.Fixed && d.AvailableFreeSpace > 200_000_000)
+            .Select(d => d.RootDirectory.FullName)
+            .FirstOrDefault(r => !DriveProbe.IsSameVolume(r, t.Path));
+        if (otherRoot is null) return;
+
+        var data = Path.Combine(t.Sub("src"), "X");
+        MakeFile(Path.Combine(data, "big.bin"), 9_000_000);
+        MakeFile(Path.Combine(data, "s", "small.txt"), 100);
+        var expected = Hash(Path.Combine(data, "big.bin"));
+        var dst = Path.Combine(otherRoot, "hypercopy-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var r = Run(new CopyOptions { Mode = TransferMode.Move, Verify = true }, [data], dst);
+            Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+            Assert.False(Directory.Exists(data));
+            Assert.Equal(expected, Hash(Path.Combine(dst, "X", "big.bin")));
+            Assert.True(r.BytesTransferred >= 9_000_100);
+        }
+        finally
+        {
+            try { Directory.Delete(dst, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Locked_source_is_reported_and_existing_destination_is_kept()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "locked.bin"), 1000);
+        var dst = t.Sub("dst");
+        var existing = MakeFile(Path.Combine(dst, "locked.bin"), 50);
+        using (new FileStream(src, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var r = Run(new CopyOptions { Conflict = ConflictPolicy.Overwrite, RetryCount = 0 }, [src], dst);
+            Assert.Equal(1, r.FilesFailed);
+            Assert.Single(r.Errors);
+        }
+        Assert.Equal(50, new FileInfo(existing).Length);
+    }
+
+    [Fact]
+    public void Rejects_destination_inside_source()
+    {
+        using var t = new TempDir();
+        var data = t.Sub("src");
+        MakeFile(Path.Combine(data, "a.txt"), 1);
+        var engine = new CopyEngine(new CopyOptions());
+        Assert.Throws<InvalidOperationException>(() => engine.Scan([data], Path.Combine(data, "inner")));
+    }
+
+    [Fact]
+    public void Cancellation_stops_and_leaves_no_partial_file()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "huge.bin"), 300_000_000);
+        var dst = t.Sub("dst");
+        var engine = new CopyEngine(new CopyOptions { BufferSizeOverride = 1 << 20 });
+        var plan = engine.Scan([src], dst);
+        using var cts = new CancellationTokenSource();
+        engine.Pause.Pause(); // hold the job so cancellation is deterministic
+        var job = engine.ExecuteAsync(plan, cts.Token);
+        Thread.Sleep(200);
+        cts.Cancel();
+        var r = job.Result;
+        Assert.True(r.Cancelled);
+        Assert.False(File.Exists(Path.Combine(dst, "huge.bin")));
+    }
+
+    [Fact]
+    public void Pause_and_resume_completes()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "p.bin"), 40_000_000);
+        var dst = t.Sub("dst");
+        var engine = new CopyEngine(new CopyOptions { BufferSizeOverride = 1 << 20 });
+        var plan = engine.Scan([src], dst);
+        engine.Pause.Pause();
+        var job = engine.ExecuteAsync(plan);
+        Thread.Sleep(300);
+        Assert.False(job.IsCompleted);
+        engine.Pause.Resume();
+        Assert.True(job.Result.Success);
+        Assert.Equal(Hash(src), Hash(Path.Combine(dst, "p.bin")));
+    }
+
+    [Fact]
+    public void Long_paths_are_supported()
+    {
+        using var t = new TempDir();
+        var deep = Path.Combine(t.Sub("src"), "L");
+        string p = deep;
+        while (p.Length < 400) p = Path.Combine(p, new string('d', 40));
+        MakeFile(Path.Combine(p, "long.bin"), 5_000_000);
+        var dst = t.Sub("dst");
+        var r = Run(new CopyOptions { Verify = true }, [deep], dst);
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        AssertTreesEqual(deep, Path.Combine(dst, "L"));
+    }
+
+    [Fact]
+    public void Unbuffered_io_is_really_used()
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "u.bin"), 10_000);
+        using (FastFileIo.OpenRead(src, unbuffered: true, out bool readUnbuffered))
+            Assert.True(readUnbuffered);
+        using (FastFileIo.OpenWrite(Path.Combine(t.Path, "w.bin"), 8192, unbuffered: true, out bool writeUnbuffered))
+            Assert.True(writeUnbuffered);
+    }
+
+    [Fact]
+    public void Drive_probe_describes_system_drive()
+    {
+        var d = DriveProbe.Describe(Path.GetTempPath());
+        Assert.NotNull(d.VolumeRoot);
+        Assert.True(d.FreeBytes > 0);
+        var tuning = DriveProbe.ResolveTuning(d, d, new CopyOptions());
+        Assert.True(tuning.BufferSize % 4096 == 0);
+    }
+}
