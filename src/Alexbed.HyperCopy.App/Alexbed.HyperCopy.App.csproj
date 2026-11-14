@@ -13,7 +13,8 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- No compression: it shrank the exe 141 → 64 MB but cost ~0.45 s on every start (measured 1.73 s vs 1.27 s). -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>

@@ -52,6 +52,19 @@ What we found:
   to pin down.
 - **Open item for v1.1:** close the small-file gap to Robocopy `/MT` on SSDs.
 
+## Start-up time (v1.0.2)
+
+Time from launching the exe until the window is visible and idle, median of 5 warm starts (4-core PC, SATA SSD):
+
+| Build | Start-up | Exe size |
+|---|---|---|
+| v1.0.1, compressed single file | 1.73 s | 64 MB |
+| **v1.0.2, uncompressed single file** | **1.27 s** | 141 MB |
+| Uncompressed, folder of files (not single file) | 1.45 s | many files |
+| Empty WPF window (lowest possible for WPF) | 0.88 s | 148 MB |
+
+The CLI starts in 143 ms uncompressed versus 199 ms compressed. The first start after a reboot is slower for all builds.
+
 ## Reproduce
 
 ```

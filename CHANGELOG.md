@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 (2026-11-14)
+
+- **Opens faster:** the window appears in about 1.3 s instead of 1.7 s (median of 5 warm starts on a
+  4-core PC with a SATA SSD). The exes are no longer compressed, so they are bigger: the app is 141 MB (was 64 MB)
+  and `hypercopy.exe` 70 MB (was 36 MB, starts in 143 ms instead of 199 ms).
+
 ## 1.0.1 (2026-11-14)
 
 - With **Verify checksums** on, the finished screen now shows a clear **Checksums PASS · N files** or

@@ -22,8 +22,8 @@ Confirm with Alexander before pushing, tagging or publishing the release.
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
-It runs all tests (must be 0 failed), then writes `dist\AlexbedHyperCopy.exe` (~64 MB, self-contained),
-`dist\hypercopy.exe` (~36 MB) and `dist\SHA256SUMS.txt`.
+It runs all tests (must be 0 failed), then writes `dist\AlexbedHyperCopy.exe` (~141 MB, self-contained, uncompressed for fast start),
+`dist\hypercopy.exe` (~70 MB) and `dist\SHA256SUMS.txt`.
 
 Smoke test the real exe from a separate folder (portable check): copy it to `%TEMP%\hc-portable`, run a job with
 `HYPERCOPY_AUTOSTART=1` and a long `HYPERCOPY_SNAPSHOT_DELAY`, then hash-compare source and destination trees.

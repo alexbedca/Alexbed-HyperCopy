@@ -16,7 +16,7 @@
   <a href="../../actions"><img src="https://img.shields.io/github/actions/workflow/status/alexbedca/Alexbed-HyperCopy/build.yml?label=tests" alt="Build status"></a>
 </p>
 
-**Version:** 1.0.1 &nbsp;|&nbsp; **Author:** Alexander Bediako &nbsp;|&nbsp; **Licence:** [GPL-3.0-or-later](LICENSE)
+**Version:** 1.0.2 &nbsp;|&nbsp; **Author:** Alexander Bediako &nbsp;|&nbsp; **Licence:** [GPL-3.0-or-later](LICENSE)
 
 ![HyperCopy copying a 6 GB file at 244 MB/s with a live throughput graph](docs/screenshots/copying.png)
 

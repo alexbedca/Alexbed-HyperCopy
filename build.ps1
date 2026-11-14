@@ -11,7 +11,7 @@ if (Test-Path dist) { Remove-Item -Recurse -Force dist }
 dotnet publish src/Alexbed.HyperCopy.App -c Release -r win-x64 -o dist
 if ($LASTEXITCODE -ne 0) { throw "Publishing the app failed" }
 dotnet publish src/Alexbed.HyperCopy.Cli -c Release -r win-x64 --self-contained `
-    -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o dist
+    -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=false -p:DebugType=none -o dist
 if ($LASTEXITCODE -ne 0) { throw "Publishing the CLI failed" }
 Get-ChildItem dist -Exclude *.exe | Remove-Item -Force
 

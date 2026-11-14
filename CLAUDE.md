@@ -5,7 +5,7 @@ A free, portable Windows 10/11 app that copies and moves files (up to terabytes)
 choose sources and a destination folder or USB drive, pick **Copy** or **Move**, and watch live speed/ETA. It's one
 of Alexander's "Alexbed" apps, built from scratch with Claude in Nov 2026.
 
-- **Status:** v1.0.1 released 2026-11-14 (checksum PASS/FAIL badge); v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
+- **Status:** v1.0.2 released 2026-11-14 (uncompressed exes, faster start); v1.0.1 (checksum PASS/FAIL badge); v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
   (GPL-3.0-or-later), release with `AlexbedHyperCopy.exe` + `hypercopy.exe` (CLI) + `SHA256SUMS.txt`, CI green,
   social preview set.
 - **Next (v1.1):** close the small-file gap with Robocopy `/MT` on SSD (~2× slower today). See `ROADMAP.md`.
@@ -26,7 +26,7 @@ build.ps1                    tests + portable exes + checksums (also used by CI)
 ## Tools for this project
 **Project commands**
 - `dotnet test -c Release`: 38 tests, ~15 s. Every engine change needs a test.
-- `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\` (self-contained single-file exes, ~64 MB + ~36 MB).
+- `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\` (self-contained single-file exes, ~141 MB + ~70 MB).
 - `dotnet run --project src/Alexbed.HyperCopy.Cli -- copy <src>... <dst> [--verify --profile ssd|hdd --write-depth N --buffer-mb N --threads N]`.
 - Snapshot hook: `HYPERCOPY_SNAPSHOT=<png>` (+ `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_VERIFY=1`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`) renders
   the window to PNG and exits. Used for all screenshots and for UI checks without driving the desktop.
@@ -45,6 +45,8 @@ build.ps1                    tests + portable exes + checksums (also used by CI)
 ## Decisions backed by measurements (don't undo without re-measuring)
 - Small files (< 4 MB) use CopyFileEx (`File.Copy`) + restore creation time: 4–8× faster than handle-based copying.
 - Large files: unbuffered, sector-aligned pipeline; HDD/USB = 1 writer (concurrent writes cost 12–35%), SSD = 2.
+- Single-file exes are **not compressed**: compression cost ~0.45 s per app start (1.73 → 1.27 s) and ~56 ms per
+  CLI start. An empty WPF window takes ~0.88 s on this PC, so ~0.35 s is HyperCopy's own window.
 - `InvariantGlobalization` crashes WPF bindings at startup; it's only set on the CLI.
 - Tests must not block on `.Result` (xUnit1031); use `async Task` + `await`.
 
