@@ -38,7 +38,9 @@ Look at every image. Upload a new social card in repo Settings → Social previe
 ## 4. Publish
 1. Commit with a message file: `git commit -F <file>`, ending with the Co-Authored-By line.
 2. `git push` (plain git. Git Credential Manager has the workflow scope; gh doesn't).
-3. Write release notes: screenshot, download table (AlexbedHyperCopy.exe / hypercopy.exe / SHA256SUMS.txt),
+3. Write release notes: screenshot (link it by commit, not `main`:
+   `https://raw.githubusercontent.com/alexbedca/Alexbed-HyperCopy/<commit>/docs/screenshots/complete.png`,
+   so older releases keep their own image when screenshots are replaced), download table (AlexbedHyperCopy.exe / hypercopy.exe / SHA256SUMS.txt),
    highlights, honest known limitations. Then:
    ```powershell
    gh release create vX.Y.Z dist\AlexbedHyperCopy.exe dist\hypercopy.exe dist\SHA256SUMS.txt `
