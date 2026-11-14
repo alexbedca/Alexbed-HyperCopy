@@ -50,6 +50,8 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
+            if (Environment.GetEnvironmentVariable("HYPERCOPY_VERIFY") == "1")
+                _vm.Verify = true;
             if (Environment.GetEnvironmentVariable("HYPERCOPY_AUTOSTART") == "1")
                 _ = _vm.StartAsync(this);
             if (Environment.GetEnvironmentVariable("HYPERCOPY_SNAPSHOT") is { Length: > 0 } shot)

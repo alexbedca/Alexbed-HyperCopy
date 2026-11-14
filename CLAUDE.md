@@ -5,7 +5,7 @@ A free, portable Windows 10/11 app that copies and moves files (up to terabytes)
 choose sources and a destination folder or USB drive, pick **Copy** or **Move**, and watch live speed/ETA. It's one
 of Alexander's "Alexbed" apps, built from scratch with Claude in Nov 2026.
 
-- **Status:** v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
+- **Status:** v1.0.1 released 2026-11-14 (checksum PASS/FAIL badge); v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
   (GPL-3.0-or-later), release with `AlexbedHyperCopy.exe` + `hypercopy.exe` (CLI) + `SHA256SUMS.txt`, CI green,
   social preview set.
 - **Next (v1.1):** close the small-file gap with Robocopy `/MT` on SSD (~2× slower today). See `ROADMAP.md`.
@@ -18,17 +18,17 @@ C# / .NET 10 (`net10.0-windows`), WPF UI, xUnit tests, System.IO.Hashing (XXH3) 
 src/Alexbed.HyperCopy.Core   engine: CopyEngine, PipelinedFileCopier (FastFileIo.cs), DriveProbe, options/progress
 src/Alexbed.HyperCopy.App    WPF window: MainWindow.xaml(.cs), MainViewModel.cs, theme in App.xaml
 src/Alexbed.HyperCopy.Cli    hypercopy.exe
-tests/Alexbed.HyperCopy.Tests  35 tests
+tests/Alexbed.HyperCopy.Tests  38 tests
 tools/                       benchmark.ps1, make_logo.py, make_social_preview.py
 build.ps1                    tests + portable exes + checksums (also used by CI)
 ```
 
 ## Tools for this project
 **Project commands**
-- `dotnet test -c Release`: 35 tests, ~15 s. Every engine change needs a test.
+- `dotnet test -c Release`: 38 tests, ~15 s. Every engine change needs a test.
 - `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\` (self-contained single-file exes, ~64 MB + ~36 MB).
 - `dotnet run --project src/Alexbed.HyperCopy.Cli -- copy <src>... <dst> [--verify --profile ssd|hdd --write-depth N --buffer-mb N --threads N]`.
-- Snapshot hook: `HYPERCOPY_SNAPSHOT=<png>` (+ `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`) renders
+- Snapshot hook: `HYPERCOPY_SNAPSHOT=<png>` (+ `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_VERIFY=1`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`) renders
   the window to PNG and exits. Used for all screenshots and for UI checks without driving the desktop.
 - `python -I tools/make_logo.py <dir>` regenerates logo PNG/ICO. `tools/make_social_preview.py` regenerates the 1280×640 card.
 

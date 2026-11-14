@@ -22,6 +22,9 @@ public sealed class CopyEngine
 
     private readonly CopyOptions _options;
     private readonly ConcurrentQueue<CopyError> _errors = new();
+
+    /// <summary>Test hook: runs on the written file just before it is read back for verification.</summary>
+    internal Action<string>? BeforeVerify { get; set; }
     private readonly ConcurrentBag<PipelinedFileCopier> _copierPool = new();
     private TuningProfile _tuning = null!;
 
@@ -284,6 +287,9 @@ public sealed class CopyEngine
         result.FilesCopied = Progress.CompletedFiles;
         result.FilesSkipped = Progress.SkippedFiles;
         result.FilesFailed = Progress.FailedFiles;
+        result.Verified = _options.Verify;
+        result.ChecksumsPassed = Progress.ChecksumsPassed;
+        result.ChecksumsFailed = Progress.ChecksumsFailed;
         result.BytesTransferred = Progress.TransferredBytes;
         result.Errors.AddRange(_errors);
         return result;
@@ -393,7 +399,10 @@ public sealed class CopyEngine
                 FastFileIo.ApplyAttributes(dest, item.Attributes);
 
                 if (_options.Verify)
+                {
+                    BeforeVerify?.Invoke(dest);
                     VerifyCopy(dest, srcHash, ct);
+                }
 
                 // Balance the percentage when the file changed size since the scan.
                 if (reported != item.Length) Progress.AddProcessedOnly(item.Length - reported);
@@ -401,6 +410,7 @@ public sealed class CopyEngine
                 if (_options.Mode == TransferMode.Move)
                     DeleteSource(item.Source);
 
+                if (_options.Verify) Progress.ChecksumPassed();
                 Progress.FileCompleted();
                 return;
             }
@@ -426,6 +436,7 @@ public sealed class CopyEngine
 
                 Progress.AddProcessedOnly(item.Length);
                 Progress.FileFailed();
+                if (ex is ChecksumMismatchException) Progress.ChecksumFailed();
                 _errors.Enqueue(new CopyError(item.Source, Describe(ex)));
                 return;
             }
@@ -545,7 +556,7 @@ public sealed class CopyEngine
         {
             ulong actual = FastFileIo.HashFile(dest, buffer, n => { verified += n; Progress.AddVerified(n); }, Pause, ct);
             if (actual != expected)
-                throw new IOException("Verification failed: the copy does not match the source (checksum mismatch).");
+                throw new ChecksumMismatchException();
         }
         catch
         {
@@ -648,3 +659,7 @@ public sealed class CopyEngine
         _ => ex.Message,
     };
 }
+
+/// <summary>The copy read back from the destination does not match the source.</summary>
+public sealed class ChecksumMismatchException()
+    : IOException("Verification failed: the copy does not match the source (checksum mismatch).");

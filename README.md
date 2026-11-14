@@ -16,7 +16,7 @@
   <a href="../../actions"><img src="https://img.shields.io/github/actions/workflow/status/alexbedca/Alexbed-HyperCopy/build.yml?label=tests" alt="Build status"></a>
 </p>
 
-**Version:** 1.0.0 &nbsp;|&nbsp; **Author:** Alexander Bediako &nbsp;|&nbsp; **Licence:** [GPL-3.0-or-later](LICENSE)
+**Version:** 1.0.1 &nbsp;|&nbsp; **Author:** Alexander Bediako &nbsp;|&nbsp; **Licence:** [GPL-3.0-or-later](LICENSE)
 
 ![HyperCopy copying a 6 GB file at 244 MB/s with a live throughput graph](docs/screenshots/copying.png)
 
@@ -65,7 +65,9 @@ Get-FileHash .\AlexbedHyperCopy.exe -Algorithm SHA256
    | **Keep both** | Saves the new file as `name (2).ext`. |
 
 5. **Verify checksums** (optional): every file is read back from the disk and compared with the original
-   (XXH3). It takes longer, but you get certainty for backups.
+   (XXH3). It takes longer, but you get certainty for backups. When the job ends, a badge shows
+   **Checksums PASS** (every copied file matches) or **Checksum FAIL** (with the number of files; the bad
+   copies are deleted and listed with the errors). Nothing is written to a log file.
 6. **Speed profile:** leave it on *Auto-detect* unless you know better.
 7. Press **Start**. You can pause, resume or cancel at any time. Problems are listed with a reason, and
    *Copy list* puts them on the clipboard.
@@ -118,7 +120,7 @@ It returns exit code `0` when everything succeeded, so it suits scheduled backup
 You need Windows and the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```powershell
-dotnet test                                          # 35 tests, about 15 s
+dotnet test                                          # 38 tests, about 15 s
 powershell -ExecutionPolicy Bypass -File build.ps1   # tests + portable exes in dist\
 ```
 

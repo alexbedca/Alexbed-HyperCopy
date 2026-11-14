@@ -54,6 +54,10 @@ public sealed class CopyResult
     public long FilesCopied { get; internal set; }
     public long FilesSkipped { get; internal set; }
     public long FilesFailed { get; internal set; }
+    /// <summary>True when the job ran with checksum verification.</summary>
+    public bool Verified { get; internal set; }
+    public long ChecksumsPassed { get; internal set; }
+    public long ChecksumsFailed { get; internal set; }
     public long BytesTransferred { get; internal set; }
     public TimeSpan Elapsed { get; internal set; }
     public bool Cancelled { get; internal set; }

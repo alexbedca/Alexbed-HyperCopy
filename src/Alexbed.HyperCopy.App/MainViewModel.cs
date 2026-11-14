@@ -155,6 +155,18 @@ public sealed class MainViewModel : Observable
     private string _currentFile = "";
     public string CurrentFile { get => _currentFile; private set => Set(ref _currentFile, value); }
     private double _peak;
+
+    // Checksum pass/fail badge (only when "Verify checksums" is on).
+    private bool _showChecksum;
+    public bool ShowChecksum { get => _showChecksum; private set => Set(ref _showChecksum, value); }
+    private string _checksumText = "";
+    public string ChecksumText { get => _checksumText; private set => Set(ref _checksumText, value); }
+    private string _checksumGlyph = "";
+    public string ChecksumGlyph { get => _checksumGlyph; private set => Set(ref _checksumGlyph, value); }
+    private string _checksumTip = "";
+    public string ChecksumTip { get => _checksumTip; private set => Set(ref _checksumTip, value); }
+    private Brush _checksumBrush = Brushes.White;
+    public Brush ChecksumBrush { get => _checksumBrush; private set => Set(ref _checksumBrush, value); }
     public bool HasErrors => Errors.Count > 0;
 
     // ── Commands ──
@@ -243,6 +255,7 @@ public sealed class MainViewModel : Observable
             else if (result.FilesFailed > 0) Finish($"Finished with {result.FilesFailed} error{(result.FilesFailed == 1 ? "" : "s")}", "Warning");
             else Finish(Mode == TransferMode.Move ? "Move complete" : "Copy complete", "Success");
 
+            UpdateChecksumBadge(_engine.Progress, done: !result.Cancelled && result.FatalError is null);
             ElapsedText = $"Took {Format.Duration(result.Elapsed)}";
             if (result.BytesTransferred > 0)
             {
@@ -376,6 +389,7 @@ public sealed class MainViewModel : Observable
         FilesText = Format.Count(doneFiles);
         FilesSub = $"of {Format.Count(p.TotalFiles)}" + (p.FailedFiles > 0 ? $" · {p.FailedFiles} failed" : "") +
                    (p.SkippedFiles > 0 ? $" · {Format.Count(p.SkippedFiles)} skipped" : "");
+        UpdateChecksumBadge(p, done: false);
         if (State is JobState.Running or JobState.Paused && p.CurrentFile is { } cf)
             CurrentFile = cf;
         Raise(nameof(EtaLabel));
@@ -385,6 +399,47 @@ public sealed class MainViewModel : Observable
     {
         Percent = 0; PercentText = "0"; SpeedText = "—"; SpeedSub = ""; EtaText = "—"; ElapsedText = "";
         BytesText = "—"; BytesSub = ""; FilesText = "—"; FilesSub = ""; CurrentFile = "";
+        ShowChecksum = false; ChecksumText = ""; ChecksumTip = "";
+    }
+
+    /// <summary>PASS / FAIL badge for the verification pass. While running it shows the count so far;
+    /// once the job has finished normally it gives the final verdict.</summary>
+    private void UpdateChecksumBadge(CopyProgress p, bool done)
+    {
+        if (!p.VerifyEnabled) { ShowChecksum = false; return; }
+        ShowChecksum = true;
+        long passed = p.ChecksumsPassed, failed = p.ChecksumsFailed;
+        string skipped = p.SkippedFiles > 0 ? $"\n{Format.Count(p.SkippedFiles)} skipped file(s) were not copied, so not checked." : "";
+
+        if (failed > 0)
+        {
+            ChecksumGlyph = "";
+            ChecksumText = $"Checksum FAIL · {Format.Count(failed)} file{(failed == 1 ? "" : "s")}";
+            ChecksumBrush = (Brush)Application.Current.Resources["Danger"];
+            ChecksumTip = $"{Format.Count(failed)} file(s) did not match the source after retrying. They are listed with the errors; " +
+                          $"the bad copies were deleted. {Format.Count(passed)} file(s) matched.{skipped}";
+        }
+        else if (!done)
+        {
+            ChecksumGlyph = "";
+            ChecksumText = $"Checksums · {Format.Count(passed)} OK";
+            ChecksumBrush = (Brush)Application.Current.Resources["Muted"];
+            ChecksumTip = "Every copied file is read back from the destination and its XXH3 checksum compared with the source.";
+        }
+        else if (passed > 0)
+        {
+            ChecksumGlyph = "";
+            ChecksumText = $"Checksums PASS · {Format.Count(passed)} file{(passed == 1 ? "" : "s")}";
+            ChecksumBrush = (Brush)Application.Current.Resources["Success"];
+            ChecksumTip = $"All {Format.Count(passed)} copied file(s) were read back from the destination and match the source (XXH3).{skipped}";
+        }
+        else
+        {
+            ChecksumGlyph = "";
+            ChecksumText = "Checksums · nothing to check";
+            ChecksumBrush = (Brush)Application.Current.Resources["Muted"];
+            ChecksumTip = "No file data was written (files were skipped, or moved instantly on the same drive), so there was nothing to verify." + skipped;
+        }
     }
 
     private void SetStatus(string text, string brushKey)

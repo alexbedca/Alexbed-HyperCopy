@@ -19,6 +19,7 @@ public sealed class CopyProgress
     private long _totalBytes, _processedBytes, _transferredBytes, _verifiedBytes;
     private long _totalFiles, _completedFiles, _skippedFiles, _failedFiles;
     private long _scannedFiles, _scannedBytes;
+    private long _checksumsPassed, _checksumsFailed;
     private volatile string? _currentFile;
     private volatile CopyPhase _phase;
     private volatile bool _verifyEnabled;
@@ -36,6 +37,11 @@ public sealed class CopyProgress
     public long CompletedFiles => Interlocked.Read(ref _completedFiles);
     public long SkippedFiles => Interlocked.Read(ref _skippedFiles);
     public long FailedFiles => Interlocked.Read(ref _failedFiles);
+    /// <summary>Files whose copy was read back and matched the source checksum.</summary>
+    public long ChecksumsPassed => Interlocked.Read(ref _checksumsPassed);
+    /// <summary>Files that still did not match the source after all retries (they count as failed).</summary>
+    public long ChecksumsFailed => Interlocked.Read(ref _checksumsFailed);
+    public bool VerifyEnabled => _verifyEnabled;
     public long ScannedFiles => Interlocked.Read(ref _scannedFiles);
     public long ScannedBytes => Interlocked.Read(ref _scannedBytes);
 
@@ -64,6 +70,8 @@ public sealed class CopyProgress
         Interlocked.Exchange(ref _completedFiles, 0);
         Interlocked.Exchange(ref _skippedFiles, 0);
         Interlocked.Exchange(ref _failedFiles, 0);
+        Interlocked.Exchange(ref _checksumsPassed, 0);
+        Interlocked.Exchange(ref _checksumsFailed, 0);
         _verifyEnabled = verify;
     }
 
@@ -104,6 +112,8 @@ public sealed class CopyProgress
     internal void FilesCompleted(long count) => Interlocked.Add(ref _completedFiles, count);
     internal void FileSkipped() => Interlocked.Increment(ref _skippedFiles);
     internal void FileFailed() => Interlocked.Increment(ref _failedFiles);
+    internal void ChecksumPassed() => Interlocked.Increment(ref _checksumsPassed);
+    internal void ChecksumFailed() => Interlocked.Increment(ref _checksumsFailed);
 }
 
 /// <summary>Cooperative pause gate checked between buffers and between files.</summary>

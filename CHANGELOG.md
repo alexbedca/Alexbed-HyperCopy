@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 (2026-11-14)
+
+- With **Verify checksums** on, the finished screen now shows a clear **Checksums PASS · N files** or
+  **Checksum FAIL · N files** badge (hover it for details). No log file is written. The CLI prints the same verdict.
+
 ## 1.0.0 (2026-11-13)
 
 First public release.

@@ -399,4 +399,59 @@ public class EngineTests
         var tuning = DriveProbe.ResolveTuning(d, d, new CopyOptions());
         Assert.True(tuning.BufferSize % 4096 == 0);
     }
+
+    [Fact]
+    public void Verify_reports_checksum_pass_count()
+    {
+        using var t = new TempDir();
+        var data = t.Sub("data");
+        MakeFile(Path.Combine(data, "small.bin"), 10_000);
+        MakeFile(Path.Combine(data, "sub", "large.bin"), 6L * 1024 * 1024);
+        var dst = t.Sub("dst");
+
+        var r = Run(new CopyOptions { Verify = true }, [data], dst);
+        Assert.True(r.Success);
+        Assert.True(r.Verified);
+        Assert.Equal(2, r.ChecksumsPassed);
+        Assert.Equal(0, r.ChecksumsFailed);
+
+        // A second run skips identical files: nothing copied, so nothing checked.
+        var again = Run(new CopyOptions { Verify = true, Conflict = ConflictPolicy.SkipIdentical }, [data], dst);
+        Assert.Equal(2, again.FilesSkipped);
+        Assert.Equal(0, again.ChecksumsPassed);
+
+        var off = Run(new CopyOptions { Conflict = ConflictPolicy.Overwrite }, [data], dst);
+        Assert.False(off.Verified);
+        Assert.Equal(0, off.ChecksumsPassed);
+    }
+
+    [Theory]
+    [InlineData(10_000L)]
+    [InlineData(6L * 1024 * 1024)]
+    public void Verify_reports_checksum_fail_when_copy_is_corrupted(long size)
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "f.bin"), size);
+        var good = MakeFile(Path.Combine(t.Path, "src", "g.bin"), 5000);
+        var dst = t.Sub("dst");
+
+        var engine = new CopyEngine(new CopyOptions { Verify = true });
+        engine.BeforeVerify = path =>
+        {
+            if (!path.EndsWith("f.bin", StringComparison.Ordinal)) return;
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.ReadWrite);
+            int b = fs.ReadByte();
+            fs.Position = 0;
+            fs.WriteByte((byte)(b ^ 0xFF)); // flip one byte on disk
+        };
+        var r = engine.Execute(engine.Scan([src, good], dst));
+
+        Assert.False(r.Success);
+        Assert.Equal(1, r.ChecksumsFailed);
+        Assert.Equal(1, r.ChecksumsPassed);
+        Assert.Equal(1, r.FilesFailed);
+        Assert.Contains(r.Errors, e => e.Message.Contains("checksum mismatch"));
+
+        Assert.False(File.Exists(Path.Combine(dst, "f.bin")));  // bad copy removed
+    }
 }

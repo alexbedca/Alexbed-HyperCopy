@@ -307,6 +307,14 @@
                                 </StackPanel>
                             </DockPanel>
 
+                            <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,13"
+                                    Background="{StaticResource Surface2}" CornerRadius="7" Padding="10,5" ToolTip="{Binding ChecksumTip}"
+                                    Visibility="{Binding ShowChecksum, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontFamily="{StaticResource IconFont}" Text="{Binding ChecksumGlyph}" FontSize="12" Foreground="{Binding ChecksumBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <TextBlock Text="{Binding ChecksumText}" FontSize="12.5" FontWeight="SemiBold" Foreground="{Binding ChecksumBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
                             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,14,0,0">
                                 <TextBlock Text="{Binding PercentText}" FontFamily="{StaticResource DisplayFont}" FontSize="64" FontWeight="Bold" Foreground="{StaticResource Text}"/>
                                 <TextBlock Text="%" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Muted}" VerticalAlignment="Bottom" Margin="4,0,0,14"/>
