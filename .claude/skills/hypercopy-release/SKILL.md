@@ -31,7 +31,8 @@ Smoke test the real exe from a separate folder (portable check): copy it to `%TE
 ## 3. Screenshots (if the UI changed)
 Use the snapshot hook (details in the `hypercopy-benchmark` skill) to regenerate `docs/screenshots/{welcome,setup,copying,complete}.png`,
 then the social card:
-`python -I tools/make_social_preview.py assets/logo.png docs/screenshots/copying.png docs/social-preview.png`.
+`python -I tools/make_social_preview.py assets/logo.png docs/screenshots/complete.png docs/social-preview.png`
+(since 1.0.2 the card uses the verified "complete" shot with the Checksums PASS badge).
 Look at every image. Upload a new social card in repo Settings → Social preview (Chrome; there's no API).
 
 ## 4. Publish
