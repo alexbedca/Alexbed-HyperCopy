@@ -1,43 +1,56 @@
-# Alexbed HyperCopy: notes for Claude
+# Alexbed HyperCopy: project notes for Claude
 
-Portable Windows file copier/mover. C# / .NET 10, WPF. Public repo: https://github.com/alexbedca/Alexbed-HyperCopy
-(GPL-3.0-or-later). Design and engine details: `docs/ARCHITECTURE.md`. Measured results: `docs/benchmark-results.md`.
+## What this project is
+A free, portable Windows 10/11 app that copies and moves files (up to terabytes) as fast as the drives allow:
+choose sources and a destination folder or USB drive, pick **Copy** or **Move**, and watch live speed/ETA. It's one
+of Alexander's "Alexbed" apps, built from scratch with Claude in Nov 2026.
 
-## Build, test, release
-- Tests: `dotnet test -c Release` (35 tests, ~15 s). Every engine change needs a test.
-- Release build: `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\AlexbedHyperCopy.exe`,
-  `dist\hypercopy.exe`, `dist\SHA256SUMS.txt`. CI (`.github/workflows/build.yml`) runs the same script on push.
-- Release: bump `<Version>` in `Directory.Build.props`, update `CHANGELOG.md` and the README "Version" line,
-  run `build.ps1`, commit, `git push`, then
-  `gh release create vX.Y.Z dist\* --title "Alexbed HyperCopy X.Y.Z" --notes-file <notes> --latest`.
-  Download the published exe again and check its SHA-256 against `SHA256SUMS.txt`.
-- Push with plain `git push` (Git Credential Manager has the `workflow` scope). The `gh` token lacks it, so
-  `gh repo create --push` or anything through gh's git helper is rejected when workflow files change.
+- **Status:** v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
+  (GPL-3.0-or-later), release with `AlexbedHyperCopy.exe` + `hypercopy.exe` (CLI) + `SHA256SUMS.txt`, CI green,
+  social preview set.
+- **Next (v1.1):** close the small-file gap with Robocopy `/MT` on SSD (~2× slower today). See `ROADMAP.md`.
+- **Read first:** `README.md` (user view), `docs/ARCHITECTURE.md` (engine), `docs/benchmark-results.md` (measured facts),
+  `docs/RESEARCH.md` (competitors and lessons).
 
-## Screenshots
-`$env:HYPERCOPY_SNAPSHOT="<png>"` renders the window to a PNG and exits. Add `HYPERCOPY_AUTOSTART=1`
-(start the job passed on the command line) and `HYPERCOPY_SNAPSHOT_DELAY=<ms>`. Pass sources and `--to <dest>`
-as arguments. The snapshot cancels a running job, so make the delay long enough for a "complete" shot.
-Save to `docs/screenshots/`. Regenerate the social card with `python -I tools/make_social_preview.py
-assets/logo.png docs/screenshots/copying.png docs/social-preview.png` and upload it in repo Settings → Social preview
-(there is no API for that step).
+## Stack and layout
+C# / .NET 10 (`net10.0-windows`), WPF UI, xUnit tests, System.IO.Hashing (XXH3) as the only package.
+```
+src/Alexbed.HyperCopy.Core   engine: CopyEngine, PipelinedFileCopier (FastFileIo.cs), DriveProbe, options/progress
+src/Alexbed.HyperCopy.App    WPF window: MainWindow.xaml(.cs), MainViewModel.cs, theme in App.xaml
+src/Alexbed.HyperCopy.Cli    hypercopy.exe
+tests/Alexbed.HyperCopy.Tests  35 tests
+tools/                       benchmark.ps1, make_logo.py, make_social_preview.py
+build.ps1                    tests + portable exes + checksums (also used by CI)
+```
 
-## Benchmarking: rules that bit us
-- Drives here: C: MX500 SATA SSD (reliable), E: DRAM-less SSD (drops to ~80 MB/s once its cache fills;
-  don't trust single runs), D:/G: HDDs, M: network.
-- Use source files larger than RAM (32 GB), or note when a tool read from the RAM cache.
-- Time buffered tools (Robocopy, CopyFileEx) **including a flush to disk**, otherwise they look faster.
-- Alternate run order; a drive tired from the previous run penalises whoever goes next.
-- Publish losses too (small files vs Robocopy /MT). Don't claim "fastest" without numbers.
-- Test data lives in `C:\hc-bench` (+ `E:\hc-bench`, `G:\hc-bench`). Deleting drive-root folders is
-  blocked by a guard, so use nested paths.
+## Tools for this project
+**Project commands**
+- `dotnet test -c Release`: 35 tests, ~15 s. Every engine change needs a test.
+- `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\` (self-contained single-file exes, ~64 MB + ~36 MB).
+- `dotnet run --project src/Alexbed.HyperCopy.Cli -- copy <src>... <dst> [--verify --profile ssd|hdd --write-depth N --buffer-mb N --threads N]`.
+- Snapshot hook: `HYPERCOPY_SNAPSHOT=<png>` (+ `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`) renders
+  the window to PNG and exits. Used for all screenshots and for UI checks without driving the desktop.
+- `python -I tools/make_logo.py <dir>` regenerates logo PNG/ICO. `tools/make_social_preview.py` regenerates the 1280×640 card.
 
-## Engine decisions backed by measurements (don't undo without re-measuring)
+**Project skills** (in `.claude/skills/`)
+- `hypercopy-release`: version bump → build → screenshots → GitHub release → verification.
+- `hypercopy-benchmark`: fair benchmarking rules, drive notes, known results, screenshot recipe.
+
+**Account tools this project uses** (full list in `~/.claude/CLAUDE.md`)
+- `git push` via Git Credential Manager (the `gh` token lacks `workflow` scope; don't use `gh repo create --push`).
+- `gh` for releases, CI (`gh run watch`), repo settings and topics.
+- Claude in Chrome for the GitHub social-preview upload (web-only).
+- Personal skill `alexbed-github-publish` for repo-wide conventions.
+
+## Decisions backed by measurements (don't undo without re-measuring)
 - Small files (< 4 MB) use CopyFileEx (`File.Copy`) + restore creation time: 4–8× faster than handle-based copying.
-- HDD/USB uses WriteDepth 1. Concurrent writes cost 12–35% on HDD. SSD uses 2.
-- `InvariantGlobalization` breaks WPF bindings (crash at startup); it's only set on the CLI.
-- PowerShell 7 reserves `clean` (don't name a function `Clean`), and `R` is an alias for Invoke-History.
+- Large files: unbuffered, sector-aligned pipeline; HDD/USB = 1 writer (concurrent writes cost 12–35%), SSD = 2.
+- `InvariantGlobalization` crashes WPF bindings at startup; it's only set on the CLI.
+- Tests must not block on `.Result` (xUnit1031); use `async Task` + `await`.
 
-## Open work
-v1.1 goal: close the small-file gap with Robocopy /MT on SSD (we're ~2× slower; see ROADMAP.md). Already
-ruled out: thread-pool starvation, per-process limits, code signing, folder ordering, CopyFile2 flags.
+## Gotchas
+- PowerShell 7: `clean` is reserved, and `R` is an alias for Invoke-History. Don't use them as function names.
+- A guard blocks deleting folders directly under a drive root (`E:\x`); use nested test paths (`E:\hc-bench\x`).
+- `git commit -F -` with a PowerShell here-string failed; write the message to a file first.
+- Benchmark data lives in `C:\hc-bench`, `E:\hc-bench`, `G:\hc-bench` (~42 GB, can be deleted any time).
+- `social-cards/` (git-ignored) holds the social-card working files for the ALMP and Bulk Rename repos.
