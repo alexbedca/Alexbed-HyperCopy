@@ -29,7 +29,6 @@ public sealed class CopyEngine
     private TuningProfile _tuning = null!;
 
     public CopyEngine(CopyOptions options) => _options = options;
-
     public CopyOptions Options => _options;
     public CopyProgress Progress { get; } = new();
     public PauseController Pause { get; } = new();
@@ -446,21 +445,23 @@ public sealed class CopyEngine
     /// <summary>
     /// Small files: the kernel's CopyFileEx does open/copy/close in one round trip and was measured
     /// 3–5× faster per file than handle-based copying. It keeps data, attributes and modified time;
-    /// we restore the creation time. Files locked for writing by another program fall back to handles.
+    /// the creation time is stamped through CopyFileEx's own handle (SmallFileCopy), or by path if that
+    /// didn't happen. Files locked for writing by another program fall back to handles.
     /// </summary>
     private ulong CopySmall(CopyItem item, string dest, Action<long> onProgress, Action onCreated, CancellationToken ct)
     {
         ulong hash = _options.Verify ? HashSmallFile(item.Source) : 0;
+        bool stamped;
         try
         {
-            File.Copy(item.Source, dest, overwrite: true);
+            stamped = SmallFileCopy.Copy(item.Source, dest, item.CreationTimeUtc);
         }
         catch (IOException ex) when ((ex.HResult & 0xFFFF) is 32 or 33) // sharing / lock violation
         {
             return CopySmallBuffered(item, dest, onProgress, onCreated, ct);
         }
         onCreated();
-        RestoreCreationTime(dest, item.CreationTimeUtc);
+        if (!stamped) RestoreCreationTime(dest, item.CreationTimeUtc);
         onProgress(item.Length);
         return hash;
     }
