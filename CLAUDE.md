@@ -52,5 +52,6 @@ build.ps1                    tests + portable exes + checksums (also used by CI)
 - PowerShell 7: `clean` is reserved, and `R` is an alias for Invoke-History. Don't use them as function names.
 - A guard blocks deleting folders directly under a drive root (`E:\x`); use nested test paths (`E:\hc-bench\x`).
 - `git commit -F -` with a PowerShell here-string failed; write the message to a file first.
-- Benchmark data lives in `C:\hc-bench`, `E:\hc-bench`, `G:\hc-bench` (~42 GB, can be deleted any time).
+- Benchmark data (`C:\hc-bench`, ~42 GB) was deleted on 2026-11-14. `tools/benchmark.ps1` recreates it when needed;
+  delete it again afterwards.
 - `social-cards/` (git-ignored) holds the social-card working files for the ALMP and Bulk Rename repos.
