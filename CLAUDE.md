@@ -56,4 +56,5 @@ build.ps1                    tests + portable exes + checksums (also used by CI)
 - `git commit -F -` with a PowerShell here-string failed; write the message to a file first.
 - Benchmark data (`C:\hc-bench`, ~42 GB) was deleted on 2026-11-14. `tools/benchmark.ps1` recreates it when needed;
   delete it again afterwards.
-- `social-cards/` (git-ignored) holds the social-card working files for the ALMP and Bulk Rename repos.
+- The ALMP and Bulk Rename social-card working files moved out of this folder on 2026-11-14 to
+  `D:\Home\Desktop\app_dev\social-cards` (they aren't HyperCopy files).
