@@ -135,6 +135,79 @@ public class EngineTests
         Assert.True(File.GetAttributes(copied).HasFlag(FileAttributes.ReadOnly));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(4096)]
+    [InlineData(300_000)]
+    public void Small_copy_stamps_creation_time_through_copy_handle(int size)
+    {
+        using var t = new TempDir();
+        var src = MakeFile(Path.Combine(t.Sub("src"), "s.bin"), size);
+        var created = new DateTime(2011, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        var modified = new DateTime(2012, 4, 5, 6, 7, 8, DateTimeKind.Utc);
+        File.SetCreationTimeUtc(src, created);
+        File.SetLastWriteTimeUtc(src, modified);
+        File.SetAttributes(src, FileAttributes.ReadOnly | FileAttributes.Hidden);
+        var dst = Path.Combine(t.Sub("dst"), "s.bin");
+
+        bool stamped = SmallFileCopy.Copy(src, dst, created);
+
+        Assert.True(stamped, "the progress callback should set the creation time");
+        Assert.Equal(created, File.GetCreationTimeUtc(dst));
+        Assert.Equal(modified, File.GetLastWriteTimeUtc(dst));
+        Assert.True(File.GetAttributes(dst).HasFlag(FileAttributes.ReadOnly));
+        Assert.True(File.GetAttributes(dst).HasFlag(FileAttributes.Hidden));
+        Assert.Equal(Hash(src), Hash(dst));
+    }
+
+    [Fact]
+    public void Small_copy_reports_errors_like_File_Copy()
+    {
+        using var t = new TempDir();
+        var missing = Path.Combine(t.Path, "nope.bin");
+        Assert.Throws<FileNotFoundException>(() => SmallFileCopy.Copy(missing, Path.Combine(t.Path, "x.bin"), DateTime.UtcNow));
+
+        var src = MakeFile(Path.Combine(t.Sub("src"), "a.bin"), 10);
+        var dst = MakeFile(Path.Combine(t.Sub("dst"), "a.bin"), 20);
+        var ex = Assert.ThrowsAny<IOException>(() => SmallFileCopy.Copy(src, dst, DateTime.UtcNow, overwrite: false));
+        Assert.Equal(80, ex.HResult & 0xFFFF); // ERROR_FILE_EXISTS
+        using (new FileStream(src, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var locked = Assert.ThrowsAny<IOException>(() => SmallFileCopy.Copy(src, dst, DateTime.UtcNow));
+            Assert.Equal(32, locked.HResult & 0xFFFF); // sharing violation → engine falls back to handles
+        }
+
+        // Disk full must stay an IOException with code 112, or the engine won't stop the job.
+        var full = SmallFileCopy.ToException(112, "x");
+        Assert.IsType<IOException>(full);
+        Assert.Equal(112, full.HResult & 0xFFFF);
+        Assert.IsType<UnauthorizedAccessException>(SmallFileCopy.ToException(5, "x"));
+    }
+
+    [Fact]
+    public void Small_files_overwrite_readonly_destination_and_keep_times()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "D");
+        var created = new DateTime(2013, 5, 6, 7, 8, 9, DateTimeKind.Utc);
+        for (int i = 0; i < 50; i++)
+        {
+            var f = MakeFile(Path.Combine(data, $"f{i}.dat"), Rng.Next(0, 70_000));
+            File.SetCreationTimeUtc(f, created.AddMinutes(i));
+        }
+        var dst = t.Sub("dst");
+        var old = MakeFile(Path.Combine(dst, "D", "f7.dat"), 5);
+        File.SetAttributes(old, FileAttributes.ReadOnly);
+
+        var r = Run(new CopyOptions { Conflict = ConflictPolicy.Overwrite, Verify = true }, [data], dst);
+
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        AssertTreesEqual(data, Path.Combine(dst, "D"));
+        for (int i = 0; i < 50; i++)
+            Assert.Equal(created.AddMinutes(i), File.GetCreationTimeUtc(Path.Combine(dst, "D", $"f{i}.dat")));
+    }
+
     [Fact]
     public void Copies_small_file_that_another_program_is_writing()
     {
