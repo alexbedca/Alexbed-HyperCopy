@@ -59,6 +59,8 @@ public sealed class CopyEngine
             {
                 var fi = new FileInfo(src);
                 string dst = Path.Combine(destRoot, fi.Name);
+                if (IsSamePath(src, dst))
+                    throw new InvalidOperationException(SameFolderMessage(fi.Name, destRoot));
                 int start = plan.Files.Count;
                 plan.Files.Add(new CopyItem(src, dst, fi.Length, fi.Attributes, fi.CreationTimeUtc, fi.LastWriteTimeUtc));
                 Progress.AddScanned(fi.Length);
@@ -70,6 +72,8 @@ public sealed class CopyEngine
                 if (string.IsNullOrEmpty(name)) name = $"Drive {char.ToUpperInvariant(src[0])}";
                 string dst = Path.Combine(destRoot, name);
 
+                if (IsSamePath(src, dst))
+                    throw new InvalidOperationException(SameFolderMessage(name, destRoot));
                 if (IsSameOrInside(destRoot, src))
                     throw new InvalidOperationException($"The destination is inside the source folder \"{src}\". Choose a different destination.");
 
@@ -172,6 +176,15 @@ public sealed class CopyEngine
         }
         return bytes;
     }
+
+    private static bool IsSamePath(string a, string b) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)),
+                      Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);
+
+    private static string SameFolderMessage(string name, string destRoot) =>
+        $"\"{name}\" is already in the destination folder \"{destRoot}\", so every file would be copied onto itself " +
+        "and nothing would change.\n\nChoose a different destination: for example another drive, or another folder " +
+        $"such as \"{Path.Combine(destRoot, "Backup")}\".";
 
     private static bool IsSameOrInside(string candidate, string folder)
     {
@@ -570,7 +583,7 @@ public sealed class CopyEngine
     {
         string dest = item.Destination;
         if (string.Equals(Path.GetFullPath(item.Source), Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
-            throw new IOException("Source and destination are the same file.");
+            throw new SameFileException();
 
         var existing = new FileInfo(dest);
         if (!existing.Exists) return dest;
@@ -650,7 +663,8 @@ public sealed class CopyEngine
     }
 
     private static bool IsRetryable(Exception ex) =>
-        ex is IOException and not FileNotFoundException and not DirectoryNotFoundException and not PathTooLongException;
+        ex is IOException and not FileNotFoundException and not DirectoryNotFoundException and not PathTooLongException
+            and not SameFileException;
 
     private static string Describe(Exception ex) => ex switch
     {
@@ -659,6 +673,10 @@ public sealed class CopyEngine
         _ => ex.Message,
     };
 }
+
+/// <summary>A file would be copied onto itself. Never retried.</summary>
+public sealed class SameFileException()
+    : IOException("Source and destination are the same file, so it was not copied. Choose a different destination folder.");
 
 /// <summary>The copy read back from the destination does not match the source.</summary>
 public sealed class ChecksumMismatchException()

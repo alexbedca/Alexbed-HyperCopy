@@ -330,6 +330,101 @@ public class EngineTests
         Assert.Throws<InvalidOperationException>(() => engine.Scan([data], Path.Combine(data, "inner")));
     }
 
+    // Regression (v1.0.2 bug report): source folder H:\x\App copied to its own parent H:\x
+    // ran for a minute and failed every file. It must be refused before anything starts.
+    [Theory]
+    [InlineData(TransferMode.Copy)]
+    [InlineData(TransferMode.Move)]
+    public void Rejects_folder_copied_into_its_own_parent(TransferMode mode)
+    {
+        using var t = new TempDir();
+        var parent = t.Sub("Personal APP");
+        var app = Path.Combine(parent, "My App");
+        MakeFile(Path.Combine(app, "a.dll"), 100);
+        MakeFile(Path.Combine(app, "sub", "b.pyd"), 5_000_000);
+        var before = Hash(Path.Combine(app, "sub", "b.pyd"));
+
+        var engine = new CopyEngine(new CopyOptions { Mode = mode, Conflict = ConflictPolicy.Overwrite, Verify = true });
+        var ex = Assert.Throws<InvalidOperationException>(() => engine.Scan([app], parent));
+        Assert.Contains("already in the destination folder", ex.Message);
+        Assert.Equal(before, Hash(Path.Combine(app, "sub", "b.pyd"))); // untouched
+        Assert.True(File.Exists(Path.Combine(app, "a.dll")));
+    }
+
+    [Fact]
+    public void Rejects_file_copied_into_its_own_folder()
+    {
+        using var t = new TempDir();
+        var dir = t.Sub("d");
+        var f = MakeFile(Path.Combine(dir, "x.bin"), 10);
+        var engine = new CopyEngine(new CopyOptions { Conflict = ConflictPolicy.Overwrite });
+        Assert.Throws<InvalidOperationException>(() => engine.Scan([f], dir));
+        Assert.Throws<InvalidOperationException>(() => engine.Scan([f], dir + "\\")); // trailing slash
+    }
+
+    [Fact]
+    public void Failed_files_are_never_counted_as_verified()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "D");
+        var locked = MakeFile(Path.Combine(data, "locked.bin"), 200_000);
+        var big = MakeFile(Path.Combine(data, "locked-big.bin"), 6_000_000);
+        var dst = t.Sub("dst");
+
+        var engine = new CopyEngine(new CopyOptions { Verify = true, RetryCount = 0 });
+        var plan = engine.Scan([data], dst);
+        CopyResult r;
+        // Exclusive locks: every copy fails with a sharing violation.
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (new FileStream(big, FileMode.Open, FileAccess.Read, FileShare.None))
+            r = engine.Execute(plan);
+
+        Assert.Equal(2, r.FilesFailed);
+        Assert.Equal(0, r.FilesCopied);
+        Assert.Equal(0, r.ChecksumsPassed);
+        Assert.Equal(0, r.BytesTransferred);
+        Assert.Equal(0, engine.Progress.VerifiedBytes); // was 6.2 MB "verified" before the fix
+        Assert.Equal(1.0, engine.Progress.Fraction, 3);  // the bar still reaches 100%
+    }
+
+    [Fact]
+    public void Skipped_files_are_never_counted_as_verified()
+    {
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "D");
+        MakeFile(Path.Combine(data, "a.bin"), 300_000);
+        MakeFile(Path.Combine(data, "b.bin"), 6_000_000);
+        var dst = t.Sub("dst");
+        Assert.True(Run(new CopyOptions(), [data], dst).Success);
+
+        var r = Run(new CopyOptions { Verify = true, Conflict = ConflictPolicy.Skip }, [data], dst, out var engine);
+        Assert.Equal(2, r.FilesSkipped);
+        Assert.Equal(0, engine.Progress.VerifiedBytes);
+        Assert.Equal(1.0, engine.Progress.Fraction, 3);
+    }
+
+    [Fact]
+    public void Replace_overwrites_changed_files_and_verifies_them()
+    {
+        // The user's real scenario done right: a new build over an old one in another folder.
+        using var t = new TempDir();
+        var data = Path.Combine(t.Sub("src"), "App");
+        MakeFile(Path.Combine(data, "same.dll"), 100_000);
+        MakeFile(Path.Combine(data, "changed.pyd"), 50_000);
+        MakeFile(Path.Combine(data, "big.bin"), 6_000_000);
+        var dst = t.Sub("dst");
+        Assert.True(Run(new CopyOptions(), [data], dst).Success);
+        MakeFile(Path.Combine(data, "changed.pyd"), 70_000); // new build
+        MakeFile(Path.Combine(data, "new.dll"), 10);
+
+        var r = Run(new CopyOptions { Verify = true, Conflict = ConflictPolicy.Overwrite }, [data], dst, out var engine);
+        Assert.True(r.Success, string.Join("; ", r.Errors.Select(e => e.Message)));
+        Assert.Equal(4, r.FilesCopied);
+        Assert.Equal(4, r.ChecksumsPassed);
+        Assert.Equal(engine.Progress.TotalBytes, engine.Progress.VerifiedBytes);
+        AssertTreesEqual(data, Path.Combine(dst, "App"));
+    }
+
     [Fact]
     public async Task Cancellation_stops_and_leaves_no_partial_file()
     {

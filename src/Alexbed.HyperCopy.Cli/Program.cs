@@ -87,7 +87,11 @@ Console.WriteLine($"Done in {r.Elapsed.TotalSeconds:0.00}s — copied {r.FilesCo
 if (r.Verified)
     Console.WriteLine(r.ChecksumsFailed > 0
         ? $"Checksums: FAIL — {r.ChecksumsFailed} file(s) did not match the source ({r.ChecksumsPassed} passed)"
-        : $"Checksums: PASS — {r.ChecksumsPassed} file(s) read back and matched" + (r.FilesSkipped > 0 ? $" ({r.FilesSkipped} skipped, not checked)" : ""));
+        : r.ChecksumsPassed == 0
+            ? (r.FilesFailed > 0 ? $"Checksums: NOT RUN — no file was copied ({r.FilesFailed} failed)" : "Checksums: nothing to check (no file data written)")
+            : $"Checksums: PASS — {r.ChecksumsPassed} file(s) read back and matched" +
+              (r.FilesSkipped > 0 ? $" ({r.FilesSkipped} skipped, not checked)" : "") +
+              (r.FilesFailed > 0 ? $" ({r.FilesFailed} failed to copy, not checked)" : ""));
 if (r.Cancelled) Console.WriteLine("Cancelled.");
 if (r.FatalError is not null) Console.WriteLine("Fatal: " + r.FatalError);
 foreach (var e in r.Errors.Take(50)) Console.WriteLine($"  ! {e.Path}: {e.Message}");

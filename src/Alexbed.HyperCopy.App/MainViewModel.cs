@@ -252,6 +252,8 @@ public sealed class MainViewModel : Observable
                 Errors.Insert(0, new CopyError(Destination, result.FatalError));
                 Raise(nameof(HasErrors));
             }
+            else if (result.FilesFailed > 0 && result.FilesCopied == 0 && result.FilesSkipped == 0)
+                Finish($"Nothing was copied · {result.FilesFailed} error{(result.FilesFailed == 1 ? "" : "s")}", "Danger");
             else if (result.FilesFailed > 0) Finish($"Finished with {result.FilesFailed} error{(result.FilesFailed == 1 ? "" : "s")}", "Warning");
             else Finish(Mode == TransferMode.Move ? "Move complete" : "Copy complete", "Success");
 
@@ -261,6 +263,11 @@ public sealed class MainViewModel : Observable
             {
                 SpeedText = Format.Speed(result.AverageBytesPerSecond);
                 SpeedSub = _peak > 0 ? $"average · peak {Format.Speed(_peak)}" : "average";
+            }
+            else
+            {
+                SpeedText = "—";
+                SpeedSub = result.FilesCopied > 0 ? "instant (renamed on the same drive)" : "no data was written";
             }
             EtaText = Format.Duration(result.Elapsed);
             CurrentFile = result.FilesSkipped > 0
@@ -426,16 +433,25 @@ public sealed class MainViewModel : Observable
             ChecksumBrush = (Brush)Application.Current.Resources["Muted"];
             ChecksumTip = "Every copied file is read back from the destination and its XXH3 checksum compared with the source.";
         }
+        else if (passed == 0 && p.FailedFiles > 0)
+        {
+            ChecksumGlyph = ""; // warning
+            ChecksumText = "Checksums · not run";
+            ChecksumBrush = (Brush)Application.Current.Resources["Warning"];
+            ChecksumTip = $"{Format.Count(p.FailedFiles)} file(s) could not be copied (see Problems), so there was nothing to verify. " +
+                          "This is not a pass." + skipped;
+        }
         else if (passed > 0)
         {
             ChecksumGlyph = "";
             ChecksumText = $"Checksums PASS · {Format.Count(passed)} file{(passed == 1 ? "" : "s")}";
             ChecksumBrush = (Brush)Application.Current.Resources["Success"];
-            ChecksumTip = $"All {Format.Count(passed)} copied file(s) were read back from the destination and match the source (XXH3).{skipped}";
+            ChecksumTip = $"All {Format.Count(passed)} copied file(s) were read back from the destination and match the source (XXH3).{skipped}" +
+                          (p.FailedFiles > 0 ? $"\n{Format.Count(p.FailedFiles)} file(s) could not be copied at all (see Problems); they were not checked." : "");
         }
         else
         {
-            ChecksumGlyph = "";
+            ChecksumGlyph = ""; // info, not a tick: nothing was verified
             ChecksumText = "Checksums · nothing to check";
             ChecksumBrush = (Brush)Application.Current.Resources["Muted"];
             ChecksumTip = "No file data was written (files were skipped, or moved instantly on the same drive), so there was nothing to verify." + skipped;

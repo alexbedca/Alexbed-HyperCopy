@@ -16,7 +16,7 @@ public enum CopyPhase
 /// </summary>
 public sealed class CopyProgress
 {
-    private long _totalBytes, _processedBytes, _transferredBytes, _verifiedBytes;
+    private long _totalBytes, _processedBytes, _transferredBytes, _verifiedBytes, _verifySettledBytes;
     private long _totalFiles, _completedFiles, _skippedFiles, _failedFiles;
     private long _scannedFiles, _scannedBytes;
     private long _checksumsPassed, _checksumsFailed;
@@ -33,6 +33,7 @@ public sealed class CopyProgress
     public long ProcessedBytes => Interlocked.Read(ref _processedBytes);
     /// <summary>Bytes physically written — drives the speed readout.</summary>
     public long TransferredBytes => Interlocked.Read(ref _transferredBytes);
+    /// <summary>Bytes actually read back from the destination and checked. Skipped or failed files never count.</summary>
     public long VerifiedBytes => Interlocked.Read(ref _verifiedBytes);
     public long CompletedFiles => Interlocked.Read(ref _completedFiles);
     public long SkippedFiles => Interlocked.Read(ref _skippedFiles);
@@ -54,7 +55,7 @@ public sealed class CopyProgress
             long files = TotalFiles;
             if (total <= 0)
                 return files <= 0 ? 0 : (double)(CompletedFiles + SkippedFiles + FailedFiles) / files;
-            double work = ProcessedBytes + (_verifyEnabled ? VerifiedBytes : 0);
+            double work = ProcessedBytes + (_verifyEnabled ? VerifiedBytes + Interlocked.Read(ref _verifySettledBytes) : 0);
             double totalWork = total * (_verifyEnabled ? 2.0 : 1.0);
             return Math.Clamp(work / totalWork, 0, 1);
         }
@@ -67,6 +68,7 @@ public sealed class CopyProgress
         Interlocked.Exchange(ref _processedBytes, 0);
         Interlocked.Exchange(ref _transferredBytes, 0);
         Interlocked.Exchange(ref _verifiedBytes, 0);
+        Interlocked.Exchange(ref _verifySettledBytes, 0);
         Interlocked.Exchange(ref _completedFiles, 0);
         Interlocked.Exchange(ref _skippedFiles, 0);
         Interlocked.Exchange(ref _failedFiles, 0);
@@ -101,11 +103,12 @@ public sealed class CopyProgress
     }
 
     /// <summary>Bytes finished without (more) data transfer: skipped, failed, renamed or size drift.
-    /// They count for both halves of the work so the bar reaches 100% when verification is on.</summary>
+    /// They count for both halves of the work so the bar reaches 100% when verification is on,
+    /// but never as "verified" bytes, because nothing was read back.</summary>
     internal void AddProcessedOnly(long bytes)
     {
         Interlocked.Add(ref _processedBytes, bytes);
-        if (_verifyEnabled) Interlocked.Add(ref _verifiedBytes, bytes);
+        if (_verifyEnabled) Interlocked.Add(ref _verifySettledBytes, bytes);
     }
     internal void AddVerified(long bytes) => Interlocked.Add(ref _verifiedBytes, bytes);
     internal void FileCompleted() => Interlocked.Increment(ref _completedFiles);

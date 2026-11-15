@@ -127,7 +127,7 @@ public static class DriveProbe
             t = new TuningProfile(samePhysicalDisk ? 1 : 2, 1, (samePhysicalDisk ? 64 : 32) * MB, samePhysicalDisk ? 2 : 4,
                 true, true, true,
                 samePhysicalDisk
-                    ? "Same HDD · 1 stream · 64 MB blocks"
+                    ? $"Same {(dest?.Kind == StorageKind.Usb ? "USB drive" : dest?.Kind == StorageKind.Rotational ? "HDD" : "drive")} · 1 stream · 64 MB blocks"
                     : "HDD/USB · sequential · 32 MB unbuffered",
                 WriteDepth: 1); // measured: concurrent writes make HDD heads seek (-12..-35%)
         }
