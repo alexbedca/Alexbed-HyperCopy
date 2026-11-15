@@ -38,6 +38,8 @@ release goes out until all of these pass on the built exes in `dist\`**:
    no tick when nothing was checked, no "verified" bytes that were never read back, and no "complete" when
    something went wrong.
 4. Start-up time: open the exe 5 times and compare the median with `docs/benchmark-results.md`.
+5. **Regenerate the README screenshots and the social card for every release** (they show the version number),
+   check each image for overlapping or cut-off text, and upload the new card in the repo settings.
 
 ## Design rules
 - **Data safety beats speed.** Never leave a partial file, never delete a source that wasn't copied.

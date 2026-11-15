@@ -43,9 +43,14 @@ pwsh tools/release-check.ps1 -Ssd C:\hc-bench\rc -Ssd2 E:\hc-bench\rc -Hdd G:\hc
 - Start-up time: median of 5 starts, compared with `docs/benchmark-results.md`.
 - Report to Alexander: a table of every check with PASS/FAIL/NOT TESTED, before asking to publish.
 
-## 3. Screenshots (if the UI changed)
-Use the snapshot hook (details in the `hypercopy-benchmark` skill) to regenerate `docs/screenshots/{welcome,setup,copying,complete}.png`,
-then the social card:
+## 3. Screenshots and social card (EVERY release, not only when the UI changed)
+Every screenshot shows the version chip (`v1.0.x`) in the title bar, so they go stale with **every** release.
+Alexander had to ask after 1.0.3 shipped with 1.0.0/1.0.2 images. Do this **before** pushing and publishing:
+regenerate all four `docs/screenshots/{welcome,setup,copying,complete}.png` from the new `dist\` exe, look at each
+one (correct version, no overlapping or cut-off text, every number true), then rebuild and upload the social card.
+Demo data: `C:\Users\Public\hc-demo` ("Photos 2026" folder of ~400 files plus a 6 GB "Holiday 2026.mp4"),
+copying shot ~12 s into the 6 GB file with Verify on, complete shot = Photos 2026 with Verify on (60 s delay).
+Snapshot details are in the `hypercopy-benchmark` skill. Then the social card:
 `python -I tools/make_social_preview.py assets/logo.png docs/screenshots/complete.png docs/social-preview.png`
 (since 1.0.2 the card uses the verified "complete" shot with the Checksums PASS badge).
 Look at every image. Upload a new social card in repo Settings → Social preview (Chrome; there's no API).
@@ -63,6 +68,9 @@ Look at every image. Upload a new social card in repo Settings → Social previe
    ```
 
 ## 5. Verify
+- Checklist before saying "released": tests 0 failed · release-check 0 failed · UI states checked ·
+  **4 screenshots + social card regenerated with the new version and uploaded** · release notes name anything
+  NOT TESTED · download hash matches · CI green.
 - `gh release download vX.Y.Z -p AlexbedHyperCopy.exe -D <scratch>` and compare its SHA-256 with `SHA256SUMS.txt`.
 - `gh run list --limit 1`, then `gh run watch <id> --exit-status`: CI must be green. Fix any annotations in a follow-up.
 - Open the release page and the README to check that images render.

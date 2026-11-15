@@ -48,6 +48,8 @@ v1.0.2 shipped a bug only the real app showed (folder copied into its own parent
 retries, a ticked "Checksums" badge, "213 MB verified"). Use `tools/release-check.ps1` (real drives, every option)
 plus the snapshot-hook UI states listed in the `hypercopy-release` skill and CONTRIBUTING.md. Untested drives
 (e.g. USB when no stick is plugged in) must be named as NOT TESTED in the release notes.
+**Every release also regenerates all 4 README screenshots and the social card** (they show the version number),
+checks them, and uploads the card in repo Settings, before publishing. 1.0.3 first shipped with old images.
 
 ## Decisions backed by measurements (don't undo without re-measuring)
 - Small files (< 4 MB) use CopyFileEx (`File.Copy`) + restore creation time: 4–8× faster than handle-based copying.
