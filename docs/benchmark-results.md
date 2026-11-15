@@ -52,6 +52,24 @@ What we found:
   to pin down.
 - **Open item for v1.1:** close the small-file gap to Robocopy `/MT` on SSDs.
 
+## USB stick (v1.0.4)
+
+Transcend JetFlash 16 GB, exFAT. Source: an app folder on a hard disk (74 files, 213 MB; 9 files of 4 MB+ hold
+191 MB), read from the RAM cache by every tool. Removable drives use Windows' "quick removal" (no write cache), so
+buffered tools also finish only when the data is on the stick.
+
+| Tool | Time | Speed |
+|---|---:|---:|
+| **HyperCopy (auto: 1 stream)** | **33.7 – 36.3 s** | **≈6 MB/s** |
+| Robocopy (1 thread) | 41.8 s | 5.1 MB/s |
+| Windows copy engine (`Copy-Item`) | 49.1 s | 4.3 MB/s |
+| HyperCopy forced to SSD profile (parallel) | 53.8 s | 4.0 MB/s |
+| Robocopy `/MT:8` | 94.2 s | 2.3 MB/s |
+| HyperCopy (auto) + verify | 42.4 s | 5.0 MB/s |
+
+The stick itself is the limit (about 6 MB/s sustained writes). Parallel writes make cheap sticks much slower,
+which is why HyperCopy uses one sequential stream for USB. One run each; single stick.
+
 ## Start-up time (v1.0.2)
 
 Time from launching the exe until the window is visible and idle, median of 5 warm starts (4-core PC, SATA SSD):

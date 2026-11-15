@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.4 (2026-11-15)
+
+- Fixed: during a copy with **Verify checksums** on, the checksum label ("Checksums · checked after each file")
+  covered the "Elapsed" timer. It now reads "Checksums · pending" until the first file is checked.
+- Screenshots and the social preview now show the current version.
+- Tested on a USB stick (exFAT) this time: all 22 release checks passed, and HyperCopy was the fastest of the
+  tools measured on it (see [benchmark-results.md](docs/benchmark-results.md#usb-stick-v104)).
+
 ## 1.0.3 (2026-11-15)
 
 Fixes a bug reported on 1.0.2, plus a small speed-up.

@@ -5,7 +5,7 @@ A free, portable Windows 10/11 app that copies and moves files (up to terabytes)
 choose sources and a destination folder or USB drive, pick **Copy** or **Move**, and watch live speed/ETA. It's one
 of Alexander's "Alexbed" apps, built from scratch with Claude in Nov 2026.
 
-- **Status:** v1.0.3 released 2026-11-15 (same-folder warning, honest result screen, ~15% faster small files; USB not tested); v1.0.2 (uncompressed exes, faster start); v1.0.1 (checksum PASS/FAIL badge); v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
+- **Status:** v1.0.4 released 2026-11-15 (badge overlap fix; all 22 release checks incl. USB passed); v1.0.3 (same-folder warning, honest result screen, ~15% faster small files); v1.0.2 (uncompressed exes, faster start); v1.0.1 (checksum PASS/FAIL badge); v1.0.0 released 2026-11-13. Public repo https://github.com/alexbedca/Alexbed-HyperCopy
   (GPL-3.0-or-later), release with `AlexbedHyperCopy.exe` + `hypercopy.exe` (CLI) + `SHA256SUMS.txt`, CI green,
   social preview set.
 - **Next (v1.1):** close the small-file gap with Robocopy `/MT` on SSD (~2× slower today). See `ROADMAP.md`.
