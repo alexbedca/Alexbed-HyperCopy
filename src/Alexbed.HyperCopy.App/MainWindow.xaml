@@ -159,6 +159,11 @@
                                 </Button>
                                 <TextBox Style="{StaticResource PathBox}" Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged, Delay=300}"/>
                             </DockPanel>
+                            <DockPanel Margin="2,10,0,0" Visibility="{Binding DestinationProblem, Converter={x:Static local:MainWindow.NonEmptyToVis}}">
+                                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE7BA;" Foreground="{StaticResource Warning}"
+                                           FontSize="13" Margin="0,1,8,0" VerticalAlignment="Top"/>
+                                <TextBlock Text="{Binding DestinationProblem}" Foreground="{StaticResource Warning}" FontSize="12.5" TextWrapping="Wrap"/>
+                            </DockPanel>
                         </StackPanel>
                     </Border>
 

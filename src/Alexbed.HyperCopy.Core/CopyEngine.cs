@@ -176,6 +176,37 @@ public sealed class CopyEngine
         return bytes;
     }
 
+    /// <summary>
+    /// Quick check (no scanning) used by the UI while the user edits sources and destination:
+    /// returns a message when the job could never work (a source would be copied onto itself, or
+    /// into itself), otherwise null. Scan enforces the same rules.
+    /// </summary>
+    public static string? FindDestinationProblem(IEnumerable<string> sources, string destinationDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(destinationDirectory)) return null;
+        string destRoot;
+        try { destRoot = Path.GetFullPath(destinationDirectory); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return "The destination is not a valid folder path.";
+        }
+        foreach (string raw in sources)
+        {
+            string src;
+            try { src = Path.TrimEndingDirectorySeparator(Path.GetFullPath(raw)); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+            if (src.Length == 2 && src[1] == ':') src += "\\";
+            string name = Path.GetFileName(Path.TrimEndingDirectorySeparator(src));
+            if (string.IsNullOrEmpty(name)) name = $"Drive {char.ToUpperInvariant(src[0])}";
+            string dst = Path.Combine(destRoot, name);
+            if (IsSamePath(src, dst))
+                return $"\"{name}\" is already in this folder, so it would be copied onto itself. Choose a different destination.";
+            if (Directory.Exists(src) && IsSameOrInside(destRoot, src))
+                return $"The destination is inside the source folder \"{name}\". Choose a folder outside it.";
+        }
+        return null;
+    }
+
     private static bool IsSamePath(string a, string b) =>
         string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)),
                       Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);

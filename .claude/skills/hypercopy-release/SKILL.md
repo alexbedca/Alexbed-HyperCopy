@@ -18,15 +18,30 @@ Confirm with Alexander before pushing, tagging or publishing the release.
    - `ROADMAP.md` → move finished items out.
 3. If the engine changed speed, re-run the `hypercopy-benchmark` skill and update `docs/benchmark-results.md` first.
 
-## 2. Build and test
+## 2. Build and test EVERY function (mandatory: no release without it)
+Alexander's rule after the v1.0.2 bug (a folder copied into its own parent failed every file, retried for a
+minute and showed a tick on the checksum badge): **test every function and every UI state on the built exe before
+any release, and show him the results.** Unit tests passing is not enough.
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1
+pwsh tools/release-check.ps1 -Ssd C:\hc-bench\rc -Ssd2 E:\hc-bench\rc -Hdd G:\hc-bench\rc -Usb H:\hc-bench\rc
 ```
-It runs all tests (must be 0 failed), then writes `dist\AlexbedHyperCopy.exe` (~141 MB, self-contained, uncompressed for fast start),
-`dist\hypercopy.exe` (~70 MB) and `dist\SHA256SUMS.txt`.
-
-Smoke test the real exe from a separate folder (portable check): copy it to `%TEMP%\hc-portable`, run a job with
-`HYPERCOPY_AUTOSTART=1` and a long `HYPERCOPY_SNAPSHOT_DELAY`, then hash-compare source and destination trees.
+- `build.ps1` runs all unit tests (must be 0 failed) and writes `dist\AlexbedHyperCopy.exe` (~141 MB, uncompressed for
+  fast start), `dist\hypercopy.exe` (~70 MB) and `dist\SHA256SUMS.txt`.
+- `release-check.ps1` drives the real `hypercopy.exe` through every option on real drives, checks every byte,
+  timestamp and attribute, and must end with **0 failed**. Leave out `-Usb` if no stick is plugged in; it then
+  reports USB as NOT TESTED, and the release notes must say so. (Use folders below a drive root: a guard blocks
+  deleting `X:\folder`.)
+- **UI states:** use the snapshot hook to capture every state and look at each image: welcome, destination
+  warning (source folder → its own parent), copying in progress, finished + Checksums PASS, re-run all skipped
+  ("nothing to check" with an info icon, not a tick), some files locked (PASS for the rest + Problems list),
+  every file locked ("Nothing was copied", "Checksums · not run"), move on the same drive. Hooks:
+  `HYPERCOPY_SNAPSHOT=<png>`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`, `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_VERIFY=1`,
+  `HYPERCOPY_MODE=Move`, `HYPERCOPY_CONFLICT=Overwrite|Skip|KeepBoth|SkipIdentical`, args `<src>... --to <dest>`.
+  Lock a file with `[IO.File]::Open(path,'Open','Read','None')` to test failures. Every number must be true.
+- Start-up time: median of 5 starts, compared with `docs/benchmark-results.md`.
+- Report to Alexander: a table of every check with PASS/FAIL/NOT TESTED, before asking to publish.
 
 ## 3. Screenshots (if the UI changed)
 Use the snapshot hook (details in the `hypercopy-benchmark` skill) to regenerate `docs/screenshots/{welcome,setup,copying,complete}.png`,

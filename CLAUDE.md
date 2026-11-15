@@ -18,14 +18,14 @@ C# / .NET 10 (`net10.0-windows`), WPF UI, xUnit tests, System.IO.Hashing (XXH3) 
 src/Alexbed.HyperCopy.Core   engine: CopyEngine, PipelinedFileCopier (FastFileIo.cs), DriveProbe, options/progress
 src/Alexbed.HyperCopy.App    WPF window: MainWindow.xaml(.cs), MainViewModel.cs, theme in App.xaml
 src/Alexbed.HyperCopy.Cli    hypercopy.exe
-tests/Alexbed.HyperCopy.Tests  38 tests
+tests/Alexbed.HyperCopy.Tests  52 tests
 tools/                       benchmark.ps1, make_logo.py, make_social_preview.py
 build.ps1                    tests + portable exes + checksums (also used by CI)
 ```
 
 ## Tools for this project
 **Project commands**
-- `dotnet test -c Release`: 38 tests, ~15 s. Every engine change needs a test.
+- `dotnet test -c Release`: 52 tests, ~20 s. Every engine change needs a test.
 - `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\` (self-contained single-file exes, ~141 MB + ~70 MB).
 - `dotnet run --project src/Alexbed.HyperCopy.Cli -- copy <src>... <dst> [--verify --profile ssd|hdd --write-depth N --buffer-mb N --threads N]`.
 - Snapshot hook: `HYPERCOPY_SNAPSHOT=<png>` (+ `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_VERIFY=1`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`) renders
@@ -41,6 +41,13 @@ build.ps1                    tests + portable exes + checksums (also used by CI)
 - `gh` for releases, CI (`gh run watch`), repo settings and topics.
 - Claude in Chrome for the GitHub social-preview upload (web-only).
 - Personal skill `alexbed-github-publish` for repo-wide conventions.
+
+## Release rule (from Alexander, 2026-11-15)
+**Test every function and every UI state on the built exe before any release**, and show him the results table.
+v1.0.2 shipped a bug only the real app showed (folder copied into its own parent: 74 failed files after 56 s of
+retries, a ticked "Checksums" badge, "213 MB verified"). Use `tools/release-check.ps1` (real drives, every option)
+plus the snapshot-hook UI states listed in the `hypercopy-release` skill and CONTRIBUTING.md. Untested drives
+(e.g. USB when no stick is plugged in) must be named as NOT TESTED in the release notes.
 
 ## Decisions backed by measurements (don't undo without re-measuring)
 - Small files (< 4 MB) use CopyFileEx (`File.Copy`) + restore creation time: 4–8× faster than handle-based copying.

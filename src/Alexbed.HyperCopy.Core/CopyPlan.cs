@@ -67,5 +67,7 @@ public sealed class CopyResult
     public double AverageBytesPerSecond =>
         Elapsed.TotalSeconds > 0 ? BytesTransferred / Elapsed.TotalSeconds : 0;
 
-    public bool Success => !Cancelled && FatalError is null && FilesFailed == 0;
+    /// <summary>True only when nothing at all went wrong: also a missing source or an unreadable
+    /// folder (scan errors) or a folder that could not be created makes the job unsuccessful.</summary>
+    public bool Success => !Cancelled && FatalError is null && FilesFailed == 0 && Errors.Count == 0;
 }

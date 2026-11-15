@@ -16,7 +16,7 @@
   <a href="../../actions"><img src="https://img.shields.io/github/actions/workflow/status/alexbedca/Alexbed-HyperCopy/build.yml?label=tests" alt="Build status"></a>
 </p>
 
-**Version:** 1.0.2 &nbsp;|&nbsp; **Author:** Alexander Bediako &nbsp;|&nbsp; **Licence:** [GPL-3.0-or-later](LICENSE)
+**Version:** 1.0.3 &nbsp;|&nbsp; **Author:** Alexander Bediako &nbsp;|&nbsp; **Licence:** [GPL-3.0-or-later](LICENSE)
 
 ![HyperCopy copying a 6 GB file at 244 MB/s with a live throughput graph](docs/screenshots/copying.png)
 
@@ -120,11 +120,14 @@ It returns exit code `0` when everything succeeded, so it suits scheduled backup
 You need Windows and the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```powershell
-dotnet test                                          # 38 tests, about 15 s
+dotnet test                                          # 52 tests, about 20 s
 powershell -ExecutionPolicy Bypass -File build.ps1   # tests + portable exes in dist\
 ```
 
 `build.ps1` writes `dist\AlexbedHyperCopy.exe`, `dist\hypercopy.exe` and `dist\SHA256SUMS.txt`.
+
+Before every release, `tools/release-check.ps1` runs the built exe through every function on real drives
+(see [CONTRIBUTING.md](CONTRIBUTING.md#before-every-release-test-every-function-mandatory)).
 
 ## Project docs
 

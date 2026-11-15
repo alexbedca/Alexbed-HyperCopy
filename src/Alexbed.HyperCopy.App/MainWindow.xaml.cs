@@ -52,6 +52,11 @@ public partial class MainWindow : Window
         {
             if (Environment.GetEnvironmentVariable("HYPERCOPY_VERIFY") == "1")
                 _vm.Verify = true;
+            // Test hooks for the pre-release UI checks (see .claude/skills/hypercopy-release).
+            if (Enum.TryParse<Core.TransferMode>(Environment.GetEnvironmentVariable("HYPERCOPY_MODE"), true, out var mode))
+                _vm.Mode = mode;
+            if (Enum.TryParse<Core.ConflictPolicy>(Environment.GetEnvironmentVariable("HYPERCOPY_CONFLICT"), true, out var conflict))
+                _vm.Conflict = conflict;
             if (Environment.GetEnvironmentVariable("HYPERCOPY_AUTOSTART") == "1")
                 _ = _vm.StartAsync(this);
             if (Environment.GetEnvironmentVariable("HYPERCOPY_SNAPSHOT") is { Length: > 0 } shot)

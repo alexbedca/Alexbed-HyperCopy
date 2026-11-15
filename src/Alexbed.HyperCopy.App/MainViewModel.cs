@@ -51,7 +51,7 @@ public sealed class MainViewModel : Observable
     public MainViewModel()
     {
         _timer.Tick += (_, _) => Tick();
-        Sources.CollectionChanged += (_, _) => { Raise(nameof(HasSources)); Raise(nameof(CanStart)); Raise(nameof(SourcesSummary)); };
+        Sources.CollectionChanged += (_, _) => { CheckDestination(); Raise(nameof(HasSources)); Raise(nameof(CanStart)); Raise(nameof(SourcesSummary)); };
     }
 
     public ObservableCollection<SourceEntry> Sources { get; } = [];
@@ -77,8 +77,14 @@ public sealed class MainViewModel : Observable
     public string Destination
     {
         get => _destination;
-        set { if (Set(ref _destination, value)) { Raise(nameof(CanStart)); _ = RefreshDestinationInfo(); } }
+        set { if (Set(ref _destination, value)) { CheckDestination(); Raise(nameof(CanStart)); _ = RefreshDestinationInfo(); } }
     }
+
+    /// <summary>Shown under the destination box; while set, Start is disabled.</summary>
+    private string _destinationProblem = "";
+    public string DestinationProblem { get => _destinationProblem; private set => Set(ref _destinationProblem, value); }
+    private void CheckDestination() =>
+        DestinationProblem = CopyEngine.FindDestinationProblem(Sources.Select(s => s.FullPath), Destination) ?? "";
 
     private string _destinationInfo = "";
     public string DestinationInfo { get => _destinationInfo; private set => Set(ref _destinationInfo, value); }
@@ -115,7 +121,7 @@ public sealed class MainViewModel : Observable
 
     public bool IsBusy => State is JobState.Scanning or JobState.Running or JobState.Paused;
     public bool IsEditable => !IsBusy;
-    public bool CanStart => !IsBusy && HasSources && !string.IsNullOrWhiteSpace(Destination);
+    public bool CanStart => !IsBusy && HasSources && !string.IsNullOrWhiteSpace(Destination) && DestinationProblem.Length == 0;
     public bool ShowWelcome => State == JobState.Idle;
     public bool ShowDashboard => State != JobState.Idle;
     public bool ShowRunControls => IsBusy;
@@ -255,6 +261,8 @@ public sealed class MainViewModel : Observable
             else if (result.FilesFailed > 0 && result.FilesCopied == 0 && result.FilesSkipped == 0)
                 Finish($"Nothing was copied · {result.FilesFailed} error{(result.FilesFailed == 1 ? "" : "s")}", "Danger");
             else if (result.FilesFailed > 0) Finish($"Finished with {result.FilesFailed} error{(result.FilesFailed == 1 ? "" : "s")}", "Warning");
+            else if (result.Errors.Count > 0)
+                Finish($"Finished with {result.Errors.Count} problem{(result.Errors.Count == 1 ? "" : "s")}", "Warning");
             else Finish(Mode == TransferMode.Move ? "Move complete" : "Copy complete", "Success");
 
             UpdateChecksumBadge(_engine.Progress, done: !result.Cancelled && result.FatalError is null);
@@ -270,6 +278,15 @@ public sealed class MainViewModel : Observable
                 SpeedSub = result.FilesCopied > 0 ? "instant (renamed on the same drive)" : "no data was written";
             }
             EtaText = Format.Duration(result.Elapsed);
+            // Final DATA tile: only what was really written (skipped/failed files are not "done" data).
+            long totalBytes = _engine.Progress.TotalBytes;
+            bool instantMove = result.BytesTransferred == 0 && result.FilesCopied > 0 && Mode == TransferMode.Move
+                               && result.FilesFailed == 0 && result.FilesSkipped == 0;
+            BytesText = Format.Bytes(instantMove ? _engine.Progress.ProcessedBytes : result.BytesTransferred);
+            BytesSub = instantMove
+                ? "moved instantly (renamed)"
+                : $"written of {Format.Bytes(totalBytes)}" +
+                  (Verify && _engine.Progress.VerifiedBytes > 0 ? $" · {Format.Bytes(_engine.Progress.VerifiedBytes)} verified" : "");
             CurrentFile = result.FilesSkipped > 0
                 ? $"{Format.Count(result.FilesSkipped)} identical/existing file(s) skipped"
                 : "";
@@ -429,7 +446,8 @@ public sealed class MainViewModel : Observable
         else if (!done)
         {
             ChecksumGlyph = "";
-            ChecksumText = $"Checksums · {Format.Count(passed)} OK";
+            if (passed == 0) ChecksumGlyph = ""; // stopwatch: nothing checked yet, so no tick
+            ChecksumText = passed == 0 ? "Checksums · checked after each file" : $"Checksums · {Format.Count(passed)} OK";
             ChecksumBrush = (Brush)Application.Current.Resources["Muted"];
             ChecksumTip = "Every copied file is read back from the destination and its XXH3 checksum compared with the source.";
         }

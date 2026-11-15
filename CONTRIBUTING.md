@@ -20,6 +20,25 @@ Thank you for helping! HyperCopy is a small, free project: a file copier that is
    buffered tools that finish before data reaches the disk.
 6. Open a pull request and describe what you changed and why.
 
+## Before every release: test every function (mandatory)
+Unit tests alone are not enough. v1.0.2 shipped with a bug that only showed up in the real app: copying a folder
+into its own parent ran for a minute, failed every file and still showed a misleading checksum badge. So **no
+release goes out until all of these pass on the built exes in `dist\`**:
+
+1. `dotnet test -c Release`: 0 failed.
+2. `pwsh tools/release-check.ps1 -Ssd C:\hc-bench\rc -Ssd2 E:\hc-bench\rc -Hdd G:\hc-bench\rc [-Usb H:\hc-bench\rc]`:
+   0 failed. It runs the real `hypercopy.exe` through every option (copy and move, all four "if a file exists"
+   choices, verify, forced profiles, buffered, locked files, missing source, a folder into its own parent,
+   destination inside source) on real drives, and checks every byte, timestamp and attribute.
+   Any drive it could not test is listed as **NOT TESTED**; say so in the release notes.
+3. **Look at the app window in every state** with the snapshot hook (`HYPERCOPY_SNAPSHOT`, plus
+   `HYPERCOPY_AUTOSTART`, `HYPERCOPY_VERIFY=1`, `HYPERCOPY_MODE=Move`, `HYPERCOPY_CONFLICT=Overwrite|Skip|KeepBoth`):
+   welcome, a destination warning, copying in progress, finished with PASS, re-run with everything skipped,
+   some files failed, every file failed, and a move. Every number and badge on screen must be true:
+   no tick when nothing was checked, no "verified" bytes that were never read back, and no "complete" when
+   something went wrong.
+4. Start-up time: open the exe 5 times and compare the median with `docs/benchmark-results.md`.
+
 ## Design rules
 - **Data safety beats speed.** Never leave a partial file, never delete a source that wasn't copied.
 - Simple and readable for non-technical people.

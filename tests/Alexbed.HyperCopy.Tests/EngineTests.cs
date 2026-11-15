@@ -425,6 +425,36 @@ public class EngineTests
     }
 
     [Fact]
+    public void Destination_problem_is_reported_before_start()
+    {
+        using var t = new TempDir();
+        var parent = t.Sub("P");
+        var app = Directory.CreateDirectory(Path.Combine(parent, "App")).FullName;
+        var file = MakeFile(Path.Combine(parent, "f.txt"), 1);
+        var other = t.Sub("Other");
+
+        Assert.Contains("already in this folder", CopyEngine.FindDestinationProblem([app], parent));
+        Assert.Contains("already in this folder", CopyEngine.FindDestinationProblem([app], parent + "\\"));
+        Assert.Contains("already in this folder", CopyEngine.FindDestinationProblem([file], parent));
+        Assert.Contains("inside the source", CopyEngine.FindDestinationProblem([app], Path.Combine(app, "x")));
+        Assert.Contains("inside the source", CopyEngine.FindDestinationProblem([app], app));
+        Assert.Null(CopyEngine.FindDestinationProblem([app], other));
+        Assert.Null(CopyEngine.FindDestinationProblem([app], Path.Combine(parent, "Backup")));
+        Assert.Null(CopyEngine.FindDestinationProblem([app, file], ""));
+    }
+
+    [Fact]
+    public void Missing_source_makes_the_job_unsuccessful()
+    {
+        using var t = new TempDir();
+        var real = MakeFile(Path.Combine(t.Sub("src"), "a.txt"), 10);
+        var r = Run(new CopyOptions(), [real, Path.Combine(t.Path, "nope")], t.Sub("dst"));
+        Assert.Equal(1, r.FilesCopied);
+        Assert.Single(r.Errors);
+        Assert.False(r.Success); // CLI exit code 1, not 0
+    }
+
+    [Fact]
     public void Rejects_file_copied_into_its_own_folder()
     {
         using var t = new TempDir();

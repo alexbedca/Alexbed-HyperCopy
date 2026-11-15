@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.3 (2026-11-15)
+
+Fixes a bug reported on 1.0.2, plus a small speed-up.
+
+- **Fixed: copying a folder into the folder it is already in.** Example: source `H:\Apps\My App`, destination
+  `H:\Apps`. Every file would be copied onto itself. 1.0.2 started anyway, retried each file for about a minute,
+  failed them all and then showed a misleading result. Now the window warns you as soon as you pick such a
+  destination, and **Start** stays disabled until you choose another one. The command line refuses it at once.
+- **Fixed: the result screen now only shows what really happened.**
+  - "Checksums · not run" (orange) when no file could be copied. 1.0.2 showed a tick there.
+  - "Checksums · nothing to check" now has an info icon instead of a tick (for example, when every file was skipped).
+  - Skipped or failed files no longer count as "verified" data.
+  - The DATA tile shows what was actually written, and SPEED shows "—" when nothing was written (was "0 B/s").
+  - "Nothing was copied · N errors" (red) when every file failed.
+  - A missing source or an unreadable folder now gives "Finished with N problems" instead of "Copy complete",
+    and the command line returns exit code 1 (was 0).
+  - The command line prints "Checksums: NOT RUN" instead of "PASS" when no file was copied.
+  - The speed profile says "Same USB drive" instead of "Same HDD" on USB drives.
+- **Faster with many small files:** about 15% fewer seconds on 20,000 small files. Each new file is now
+  opened once instead of twice. This was measured on a busy PC, so treat it as approximate. Robocopy `/MT` is still faster
+  here (see [ROADMAP.md](ROADMAP.md)).
+- New pre-release check (`tools/release-check.ps1`) that tests every function of the real exe on real drives;
+  52 automated tests (was 38).
+
 ## 1.0.2 (2026-11-14)
 
 - **Opens faster:** the window appears in about 1.3 s instead of 1.7 s (median of 5 warm starts on a
