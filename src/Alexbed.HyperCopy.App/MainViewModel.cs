@@ -447,7 +447,7 @@ public sealed class MainViewModel : Observable
         {
             ChecksumGlyph = "";
             if (passed == 0) ChecksumGlyph = ""; // stopwatch: nothing checked yet, so no tick
-            ChecksumText = passed == 0 ? "Checksums · checked after each file" : $"Checksums · {Format.Count(passed)} OK";
+            ChecksumText = passed == 0 ? "Checksums · pending" : $"Checksums · {Format.Count(passed)} OK";
             ChecksumBrush = (Brush)Application.Current.Resources["Muted"];
             ChecksumTip = "Every copied file is read back from the destination and its XXH3 checksum compared with the source.";
         }
