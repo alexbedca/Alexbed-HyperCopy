@@ -201,7 +201,9 @@ public sealed class CopyEngine
             string dst = Path.Combine(destRoot, name);
             if (IsSamePath(src, dst))
                 return $"\"{name}\" is already in this folder, so it would be copied onto itself. Choose a different destination.";
-            if (Directory.Exists(src) && IsSameOrInside(destRoot, src))
+            // String test first: with thousands of sources this runs on every keystroke in the destination box,
+            // so the disk is only asked about the (rare) source that actually contains the destination.
+            if (IsSameOrInside(destRoot, src) && Directory.Exists(src))
                 return $"The destination is inside the source folder \"{name}\". Choose a folder outside it.";
         }
         return null;

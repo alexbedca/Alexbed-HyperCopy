@@ -1,4 +1,4 @@
-﻿<Window x:Class="Alexbed.HyperCopy.App.MainWindow"
+<Window x:Class="Alexbed.HyperCopy.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Alexbed.HyperCopy.App"
@@ -7,7 +7,8 @@
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}"
         WindowStyle="None" ResizeMode="CanResize" AllowDrop="True"
         Icon="pack://application:,,,/Assets/AlexbedHyperCopy.ico"
-        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+        InputMethod.IsInputMethodEnabled="False">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="52" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
@@ -157,7 +158,7 @@
                                         <TextBlock Text="Browse"/>
                                     </StackPanel>
                                 </Button>
-                                <TextBox Style="{StaticResource PathBox}" Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged, Delay=300}"/>
+                                <TextBox x:Name="DestinationBox" InputMethod.IsInputMethodEnabled="True" Style="{StaticResource PathBox}" Text="{Binding Destination, UpdateSourceTrigger=PropertyChanged, Delay=300}"/>
                             </DockPanel>
                             <DockPanel Margin="2,10,0,0" Visibility="{Binding DestinationProblem, Converter={x:Static local:MainWindow.NonEmptyToVis}}">
                                 <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE7BA;" Foreground="{StaticResource Warning}"

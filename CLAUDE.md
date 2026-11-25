@@ -18,14 +18,14 @@ C# / .NET 10 (`net10.0-windows`), WPF UI, xUnit tests, System.IO.Hashing (XXH3) 
 src/Alexbed.HyperCopy.Core   engine: CopyEngine, PipelinedFileCopier (FastFileIo.cs), DriveProbe, options/progress
 src/Alexbed.HyperCopy.App    WPF window: MainWindow.xaml(.cs), MainViewModel.cs, theme in App.xaml
 src/Alexbed.HyperCopy.Cli    hypercopy.exe
-tests/Alexbed.HyperCopy.Tests  52 tests
+tests/Alexbed.HyperCopy.Tests  53 tests
 tools/                       benchmark.ps1, make_logo.py, make_social_preview.py
 build.ps1                    tests + portable exes + checksums (also used by CI)
 ```
 
 ## Tools for this project
 **Project commands**
-- `dotnet test -c Release`: 52 tests, ~20 s. Every engine change needs a test.
+- `dotnet test -c Release`: 53 tests, ~20 s. Every engine change needs a test.
 - `powershell -ExecutionPolicy Bypass -File build.ps1` → `dist\` (self-contained single-file exes, ~141 MB + ~70 MB).
 - `dotnet run --project src/Alexbed.HyperCopy.Cli -- copy <src>... <dst> [--verify --profile ssd|hdd --write-depth N --buffer-mb N --threads N]`.
 - Snapshot hook: `HYPERCOPY_SNAPSHOT=<png>` (+ `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_VERIFY=1`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`) renders
@@ -57,6 +57,12 @@ checks them, and uploads the card in repo Settings, before publishing. 1.0.3 fir
 - Single-file exes are **not compressed**: compression cost ~0.45 s per app start (1.73 → 1.27 s) and ~56 ms per
   CLI start. An empty WPF window takes ~0.88 s on this PC, so ~0.35 s is HyperCopy's own window.
 - `InvariantGlobalization` crashes WPF bindings at startup; it's only set on the CLI.
+- Typing/IME (TSF) is **off for the window, on only for the Destination box**: starting it on window activation cost
+  ~0.85 s per start on Windows 11 26300 (window visible then frozen). Sources and Problems lists add in one batch
+  (`BulkObservableCollection.AddRange`) and drops are checked on a background thread: 20k files froze 11.5 s before.
+- Closing during a job waits (≤10 s) for the engine to delete the half-written file before the process exits.
+- Speed/freeze hooks: `HYPERCOPY_PERF_LOG=<file>` (milestones + UI stalls), `HYPERCOPY_ADD_LIST=<txt>`,
+  `HYPERCOPY_FOCUS_DEST=1`; tools `ui-speed-check.ps1` and `ui-states.ps1`.
 - Tests must not block on `.Result` (xUnit1031); use `async Task` + `await`.
 
 ## Gotchas

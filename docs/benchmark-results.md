@@ -83,6 +83,30 @@ Time from launching the exe until the window is visible and idle, median of 5 wa
 
 The CLI starts in 143 ms uncompressed versus 199 ms compressed. The first start after a reboot is slower for all builds.
 
+## Start-up and responsiveness (2026-11-25, Windows 11 build 26300)
+
+Measured with `tools/ui-speed-check.ps1` (`HYPERCOPY_PERF_LOG` hook). "Freeze" = the window could not respond
+for more than 100 ms.
+
+| | Before (1.0.4) | After |
+|---|---:|---:|
+| Window visible (median of 5–7) | 1.43 s (1.3–2.6 s), **then frozen ~0.8 s** | **1.40 s (1.36–1.45 s), no freeze** |
+| Add 1,000 files at once | 0.35 s, frozen | 0.11 s, no freeze |
+| Add 5,000 files at once | 2.3 s, frozen | 0.40 s, no freeze |
+| Add 20,000 files at once | 11.5 s, frozen | 1.45 s, window stays responsive |
+| Copy a 20,000-file folder | one 0.19 s hiccup | one 0.12 s hiccup |
+
+What we found:
+- An **empty** WPF window now takes about 1.9 s on this PC (0.88 s in Nov 2026 on build 26200). About 0.85 s of
+  that is Windows' typing/IME service (TSF) starting when the window gets focus. HyperCopy now enables IME only on
+  the Destination box, so it starts only if you click there (measured: 0.06 s, no freeze).
+- Ruled out (no change): pen/touch support, GPU vs software drawing, fonts, the taskbar progress, the icon,
+  drag & drop, the custom title bar, UI Automation, tiered/PGO JIT settings. ReadyToRun is working
+  (turning it off adds 1.4 s).
+- Adding files re-checked the whole list for every file (20,000 files → 200 million comparisons and 20,000 disk
+  checks per keystroke in the destination box). Now: one background disk check and one list update.
+- HyperCopy's own window costs ~0.2 s on top of an empty WPF window.
+
 ## Reproduce
 
 ```

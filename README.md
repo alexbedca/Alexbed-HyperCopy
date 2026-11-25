@@ -120,7 +120,7 @@ It returns exit code `0` when everything succeeded, so it suits scheduled backup
 You need Windows and the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```powershell
-dotnet test                                          # 52 tests, about 20 s
+dotnet test                                          # 53 tests, about 20 s
 powershell -ExecutionPolicy Bypass -File build.ps1   # tests + portable exes in dist\
 ```
 

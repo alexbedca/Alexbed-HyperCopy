@@ -37,7 +37,9 @@ release goes out until all of these pass on the built exes in `dist\`**:
    some files failed, every file failed, and a move. Every number and badge on screen must be true:
    no tick when nothing was checked, no "verified" bytes that were never read back, and no "complete" when
    something went wrong.
-4. Start-up time: open the exe 5 times and compare the median with `docs/benchmark-results.md`.
+4. Speed and freezes: `pwsh tools/ui-speed-check.ps1` (start-up median, first click in the Destination box,
+   adding 1,000 / 5,000 / 20,000 files, a 20,000-file copy). Compare with `docs/benchmark-results.md`; no new freezes.
+   `pwsh tools/ui-states.ps1 -Out <folder>` captures every screen for step 3.
 5. **Regenerate the README screenshots and the social card for every release** (they show the version number),
    check each image for overlapping or cut-off text, and upload the new card in the repo settings.
 

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -20,7 +20,13 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        PerfLog.Mark("MainWindow: building controls");
         InitializeComponent();
+        PerfLog.Mark("MainWindow: controls built");
+        // Typing/IME support (Windows' TSF) is off for the window and on only for the Destination box
+        // (see MainWindow.xaml): starting it on window activation cost ~0.85 s per start on Windows 11 26300.
+        Activated += (_, _) => PerfLog.Mark("window activated");
+        ContentRendered += (_, _) => { PerfLog.Mark("window visible (first frame drawn)"); PerfLog.StartStallWatch(); };
         DataContext = _vm;
         VersionText.Text = "v" + (typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.0.0");
 
@@ -50,6 +56,26 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
+            PerfLog.Mark("window loaded");
+            // Speed-test hook: add every path listed in a text file, like dropping thousands of files at once.
+            if (Environment.GetEnvironmentVariable("HYPERCOPY_ADD_LIST") is { Length: > 0 } list && File.Exists(list))
+            {
+                var paths = File.ReadAllLines(list);
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                PerfLog.Mark($"adding {paths.Length} sources");
+                await _vm.AddSourcesAsync(paths);
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                PerfLog.Mark($"{_vm.Sources.Count} sources added and shown");
+            }
+            // Speed-test hook: click into the Destination box (the one place typing/IME support starts).
+            if (Environment.GetEnvironmentVariable("HYPERCOPY_FOCUS_DEST") == "1")
+            {
+                await Task.Delay(800);
+                PerfLog.Mark("focusing the Destination box");
+                DestinationBox.Focus();
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                PerfLog.Mark("Destination box focused");
+            }
             if (Environment.GetEnvironmentVariable("HYPERCOPY_VERIFY") == "1")
                 _vm.Verify = true;
             // Test hooks for the pre-release UI checks (see .claude/skills/hypercopy-release).
@@ -82,7 +108,8 @@ public partial class MainWindow : Window
         var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
         enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
         await using (var fs = File.Create(path)) enc.Save(fs);
-        _vm.Cancel();
+        PerfLog.Mark("snapshot taken");
+        await _vm.CancelAndWaitAsync(TimeSpan.FromSeconds(10));
         _forceClose = true;
         Application.Current.Shutdown();
     }
@@ -152,25 +179,25 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void OnDrop(object sender, DragEventArgs e)
+    private async void OnDrop(object sender, DragEventArgs e)
     {
         DropZone.BorderBrush = (Brush)FindResource("Stroke");
         if (_vm.IsEditable && e.Data.GetData(DataFormats.FileDrop) is string[] paths)
-            _vm.AddSources(paths);
+            await _vm.AddSourcesAsync(paths);
     }
 
     // ── Buttons ──
 
-    private void AddFiles_Click(object sender, RoutedEventArgs e)
+    private async void AddFiles_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new OpenFileDialog { Multiselect = true, Title = "Select files to transfer" };
-        if (dlg.ShowDialog(this) == true) _vm.AddSources(dlg.FileNames);
+        if (dlg.ShowDialog(this) == true) await _vm.AddSourcesAsync(dlg.FileNames);
     }
 
-    private void AddFolder_Click(object sender, RoutedEventArgs e)
+    private async void AddFolder_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new OpenFolderDialog { Multiselect = true, Title = "Select folders to transfer" };
-        if (dlg.ShowDialog(this) == true) _vm.AddSources(dlg.FolderNames);
+        if (dlg.ShowDialog(this) == true) await _vm.AddSourcesAsync(dlg.FolderNames);
     }
 
     private void Clear_Click(object sender, RoutedEventArgs e) => _vm.Sources.Clear();
@@ -217,10 +244,19 @@ public partial class MainWindow : Window
         {
             var r = MessageBox.Show(this, "A transfer is still running. Cancel it and exit?\n\nFiles already copied are kept; the file in progress is removed.",
                 "Alexbed HyperCopy", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (r != MessageBoxResult.Yes) { e.Cancel = true; return; }
-            _vm.Cancel();
+            e.Cancel = true; // close only after the engine has removed the half-written file
+            if (r == MessageBoxResult.Yes) _ = CancelThenCloseAsync();
+            return;
         }
         base.OnClosing(e);
+    }
+
+    private async Task CancelThenCloseAsync()
+    {
+        IsEnabled = false;
+        await _vm.CancelAndWaitAsync(TimeSpan.FromSeconds(10));
+        _forceClose = true;
+        Close();
     }
 
     private sealed class FuncConverter(Func<object?, object> f) : IValueConverter

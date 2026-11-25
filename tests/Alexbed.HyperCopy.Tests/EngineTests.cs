@@ -444,6 +444,18 @@ public class EngineTests
     }
 
     [Fact]
+    public void Destination_check_is_fast_with_thousands_of_sources()
+    {
+        // Runs on every keystroke in the destination box: must not ask the disk about every source.
+        using var t = new TempDir();
+        var sources = Enumerable.Range(0, 20_000).Select(i => Path.Combine(t.Path, "src", $"f{i}.dat")).ToList();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Null(CopyEngine.FindDestinationProblem(sources, Path.Combine(t.Path, "dst")));
+        Assert.True(sw.ElapsedMilliseconds < 500, $"took {sw.ElapsedMilliseconds} ms");
+        Assert.Contains("already in this folder", CopyEngine.FindDestinationProblem(sources, Path.Combine(t.Path, "src")));
+    }
+
+    [Fact]
     public void Missing_source_makes_the_job_unsuccessful()
     {
         using var t = new TempDir();

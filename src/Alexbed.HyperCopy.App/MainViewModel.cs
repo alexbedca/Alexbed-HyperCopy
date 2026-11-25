@@ -54,8 +54,8 @@ public sealed class MainViewModel : Observable
         Sources.CollectionChanged += (_, _) => { CheckDestination(); Raise(nameof(HasSources)); Raise(nameof(CanStart)); Raise(nameof(SourcesSummary)); };
     }
 
-    public ObservableCollection<SourceEntry> Sources { get; } = [];
-    public ObservableCollection<CopyError> Errors { get; } = [];
+    public BulkObservableCollection<SourceEntry> Sources { get; } = [];
+    public BulkObservableCollection<CopyError> Errors { get; } = [];
     public List<double> SpeedSamples { get; } = [];
     public event Action? GraphChanged;
 
@@ -64,6 +64,7 @@ public sealed class MainViewModel : Observable
     {
         get
         {
+            if (Adding) return "Adding…";
             int folders = Sources.Count(s => s.IsFolder), files = Sources.Count - folders;
             var parts = new List<string>();
             if (folders > 0) parts.Add($"{folders} folder{(folders == 1 ? "" : "s")}");
@@ -121,7 +122,7 @@ public sealed class MainViewModel : Observable
 
     public bool IsBusy => State is JobState.Scanning or JobState.Running or JobState.Paused;
     public bool IsEditable => !IsBusy;
-    public bool CanStart => !IsBusy && HasSources && !string.IsNullOrWhiteSpace(Destination) && DestinationProblem.Length == 0;
+    public bool CanStart => !IsBusy && !Adding && HasSources && !string.IsNullOrWhiteSpace(Destination) && DestinationProblem.Length == 0;
     public bool ShowWelcome => State == JobState.Idle;
     public bool ShowDashboard => State != JobState.Idle;
     public bool ShowRunControls => IsBusy;
@@ -177,18 +178,59 @@ public sealed class MainViewModel : Observable
 
     // ── Commands ──
 
+    /// <summary>Adds dropped/selected files and folders. The disk is checked on a background thread and
+    /// the list is updated once, so thousands of files don't freeze the window (v1.0.4: 20,000 files froze it
+    /// for 11 s, because every single add re-checked the whole list).</summary>
+    public async Task AddSourcesAsync(IEnumerable<string> paths)
+    {
+        var list = paths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (list.Count == 0) return;
+        var known = new HashSet<string>(Sources.Select(s => s.FullPath), StringComparer.OrdinalIgnoreCase);
+        var fresh = list.Where(known.Add).ToList(); // also drops duplicates inside the new batch
+        if (fresh.Count == 0) return;
+
+        Adding = true;
+        try
+        {
+            var entries = fresh.Count <= 20 ? Describe(fresh) : await Task.Run(() => Describe(fresh));
+            // The list may have changed while the disk was checked (e.g. a second drop): skip anything now present.
+            var now = new HashSet<string>(Sources.Select(s => s.FullPath), StringComparer.OrdinalIgnoreCase);
+            Sources.AddRange(entries.Where(e => now.Add(e.FullPath)).ToList());
+        }
+        finally { Adding = false; }
+    }
+
+    /// <summary>Synchronous version for the command line at start-up (a handful of paths).</summary>
     public void AddSources(IEnumerable<string> paths)
     {
-        foreach (var raw in paths)
+        var known = new HashSet<string>(Sources.Select(s => s.FullPath), StringComparer.OrdinalIgnoreCase);
+        Sources.AddRange(Describe(paths.Where(p => !string.IsNullOrWhiteSpace(p) && known.Add(p)).ToList()));
+    }
+
+    private static List<SourceEntry> Describe(List<string> paths)
+    {
+        var result = new List<SourceEntry>(paths.Count);
+        foreach (string p in paths)
         {
-            if (string.IsNullOrWhiteSpace(raw)) continue;
-            string p = raw;
-            if (Sources.Any(s => string.Equals(s.FullPath, p, StringComparison.OrdinalIgnoreCase))) continue;
-            if (Directory.Exists(p))
-                Sources.Add(new SourceEntry { FullPath = p, IsFolder = true, Detail = p });
-            else if (File.Exists(p))
-                Sources.Add(new SourceEntry { FullPath = p, IsFolder = false, Detail = $"{Format.Bytes(new FileInfo(p).Length)} · {Path.GetDirectoryName(p)}" });
+            try
+            {
+                var fi = new FileInfo(p); // one disk query gives "exists", "is folder" and size
+                if (!fi.Exists && Directory.Exists(p))
+                    result.Add(new SourceEntry { FullPath = p, IsFolder = true, Detail = p });
+                else if (fi.Exists)
+                    result.Add(new SourceEntry { FullPath = p, IsFolder = false, Detail = $"{Format.Bytes(fi.Length)} · {Path.GetDirectoryName(p)}" });
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
         }
+        return result;
+    }
+
+    private bool _adding;
+    /// <summary>True while a large drop is being checked; Start waits for it.</summary>
+    public bool Adding
+    {
+        get => _adding;
+        private set { if (Set(ref _adding, value)) { Raise(nameof(CanStart)); Raise(nameof(SourcesSummary)); } }
     }
 
     public async Task StartAsync(Window owner)
@@ -212,7 +254,7 @@ public sealed class MainViewModel : Observable
         try
         {
             _plan = await _engine.ScanAsync(Sources.Select(s => s.FullPath).ToList(), Destination, _cts.Token);
-            foreach (var e in _plan.ScanErrors) Errors.Add(e);
+            Errors.AddRange(_plan.ScanErrors);
             Raise(nameof(HasErrors));
 
             if (_plan.Files.Count == 0 && _plan.Directories.Count == 0)
@@ -246,9 +288,10 @@ public sealed class MainViewModel : Observable
             State = JobState.Running;
             _clock.Restart();
             _window.Clear();
-            var result = await _engine.ExecuteAsync(_plan, _cts.Token);
+            _job = _engine.ExecuteAsync(_plan, _cts.Token);
+            var result = await _job;
             Tick();
-            foreach (var e in result.Errors.Skip(Errors.Count)) Errors.Add(e);
+            Errors.AddRange(result.Errors.Skip(Errors.Count).ToList());
             Raise(nameof(HasErrors));
 
             if (result.Cancelled) Finish("Cancelled", "Warning");
@@ -338,6 +381,17 @@ public sealed class MainViewModel : Observable
     {
         _cts?.Cancel();
         _engine?.Pause.Resume();
+    }
+
+    private Task<CopyResult>? _job;
+
+    /// <summary>Cancels a running job and waits until the engine has removed the half-written file,
+    /// so closing the window never leaves a partial copy behind (the engine thread dies with the process).</summary>
+    public async Task CancelAndWaitAsync(TimeSpan timeout)
+    {
+        Cancel();
+        if (_job is { IsCompleted: false } job)
+            await Task.WhenAny(job, Task.Delay(timeout));
     }
 
     public void Reset()
@@ -505,6 +559,22 @@ public sealed class MainViewModel : Observable
     private static extern uint SetThreadExecutionState(uint flags);
     private static void KeepAwake(bool on) =>
         SetThreadExecutionState(on ? 0x80000000u | 0x00000001u : 0x80000000u);
+}
+
+/// <summary>ObservableCollection that can add many items with a single change notification.</summary>
+public sealed class BulkObservableCollection<T> : ObservableCollection<T>
+{
+    public void AddRange(IReadOnlyCollection<T> items)
+    {
+        if (items.Count == 0) return;
+        if (items.Count == 1) { Add(items.First()); return; }
+        CheckReentrancy();
+        foreach (var item in items) Items.Add(item);
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new System.Collections.Specialized.NotifyCollectionChangedEventArgs(
+            System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
+    }
 }
 
 /// <summary>Binds an enum property to a group of RadioButtons.</summary>

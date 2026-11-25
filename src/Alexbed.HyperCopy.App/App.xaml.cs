@@ -6,10 +6,19 @@ namespace Alexbed.HyperCopy.App;
 
 public partial class App : Application
 {
+    public App() => PerfLog.Mark("App created (runtime started)");
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        PerfLog.Mark("App.OnStartup");
         DispatcherUnhandledException += OnUnhandled;
         base.OnStartup(e);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        PerfLog.Flush();
+        base.OnExit(e);
     }
 
     private static void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)

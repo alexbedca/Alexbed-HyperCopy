@@ -40,7 +40,10 @@ pwsh tools/release-check.ps1 -Ssd C:\hc-bench\rc -Ssd2 E:\hc-bench\rc -Hdd G:\hc
   `HYPERCOPY_SNAPSHOT=<png>`, `HYPERCOPY_SNAPSHOT_DELAY=<ms>`, `HYPERCOPY_AUTOSTART=1`, `HYPERCOPY_VERIFY=1`,
   `HYPERCOPY_MODE=Move`, `HYPERCOPY_CONFLICT=Overwrite|Skip|KeepBoth|SkipIdentical`, args `<src>... --to <dest>`.
   Lock a file with `[IO.File]::Open(path,'Open','Read','None')` to test failures. Every number must be true.
-- Start-up time: median of 5 starts, compared with `docs/benchmark-results.md`.
+- UI states: `pwsh tools/ui-states.ps1 -Out C:\hc-bench\ui-shots` captures all 10 states (incl. a long source list
+  and "no partial file after cancel"); look at every PNG, then delete the folder.
+- Speed and freezes: `pwsh tools/ui-speed-check.ps1` → start-up median, first click in Destination, adding
+  1k/5k/20k files, 20k-file copy. Compare with `docs/benchmark-results.md`; any freeze > 100 ms is a bug to explain.
 - Report to Alexander: a table of every check with PASS/FAIL/NOT TESTED, before asking to publish.
 
 ## 3. Screenshots and social card (EVERY release, not only when the UI changed)
