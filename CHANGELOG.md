@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.5 (2026-11-25)
+
+Faster to use: no more freezes when opening the app or loading lots of files.
+
+- **No freeze after opening.** The window used to appear and then stop responding for about 0.8 s while Windows
+  started its typing/keyboard-language service. That service now starts only if you click into the Destination box.
+  Measured on a Windows 11 PC: window ready in 1.4 s (1.36–1.45 s), where before it was 1.3–2.6 s plus the freeze.
+- **Dropping thousands of files no longer locks the window.** 20,000 files: 11.5 s frozen before, now 1.45 s with
+  the window responsive. 5,000 files: 2.3 s frozen before, now 0.4 s.
+- **Starting a copy of 20,000 separately added files** no longer freezes the window for 3.5 s (lists now only draw
+  the rows you can see).
+- **Closing the window during a copy** now waits until the half-copied file is removed, as the dialog promises.
+- New pre-release checks `tools/ui-speed-check.ps1` (start-up and freezes) and `tools/ui-states.ps1` (every screen);
+  53 automated tests.
+
 ## 1.0.4 (2026-11-15)
 
 - Fixed: during a copy with **Verify checksums** on, the checksum label ("Checksums · checked after each file")
