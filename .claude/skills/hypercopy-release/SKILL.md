@@ -51,7 +51,8 @@ Every screenshot shows the version chip (`v1.0.x`) in the title bar, so they go 
 Alexander had to ask after 1.0.3 shipped with 1.0.0/1.0.2 images. Do this **before** pushing and publishing:
 regenerate all four `docs/screenshots/{welcome,setup,copying,complete}.png` from the new `dist\` exe, look at each
 one (correct version, no overlapping or cut-off text, every number true), then rebuild and upload the social card.
-Demo data: `C:\Users\Public\hc-demo` ("Photos 2026" folder of ~400 files plus a 6 GB "Holiday 2026.mp4"),
+One command does all of it: `pwsh tools/readme-screenshots.ps1` (makes demo data, 4 screenshots, social card,
+then deletes the demo data). Demo data: `C:\Users\Public\hc-demo` ("Photos 2026" folder of ~400 files plus a 6 GB "Holiday 2026.mp4"),
 copying shot ~12 s into the 6 GB file with Verify on, complete shot = Photos 2026 with Verify on (60 s delay).
 Snapshot details are in the `hypercopy-benchmark` skill. Then the social card:
 `python -I tools/make_social_preview.py assets/logo.png docs/screenshots/complete.png docs/social-preview.png`
